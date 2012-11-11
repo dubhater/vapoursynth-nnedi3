@@ -128,11 +128,9 @@ static void VS_CC nnedi3Init(VSMap *in, VSMap *out, void **instanceData, VSNode 
 
    VS_ALIGNED_MALLOC(&d->weights0, max(dims0, dims0new) * sizeof(float), 16);
 
-   for (int i=0; i<3; ++i)
+   for (int i = 0; i < 2; ++i)
    {
-      if (i < 2) {
-         VS_ALIGNED_MALLOC(&d->weights1[i], dims1 * sizeof(float), 16);
-      }
+      VS_ALIGNED_MALLOC(&d->weights1[i], dims1 * sizeof(float), 16);
    }
 
 
@@ -324,10 +322,12 @@ static void VS_CC nnedi3Init(VSMap *in, VSMap *out, void **instanceData, VSNode 
 }
 
 
-static void VS_CC copyPad(const VSFrameRef *src, FrameData *frameData, int dh, int fn, const VSAPI *vsapi) {
+static void VS_CC copyPad(const VSFrameRef *src, FrameData *frameData, void **instanceData, int fn, const VSAPI *vsapi) {
    const int off = 1 - fn;
 
-   for (int plane = 0; plane < 3; ++plane) {
+   nnedi3Data *d = (nnedi3Data *) * instanceData;
+
+   for (int plane = 0; plane < d->vi.format->numPlanes; ++plane) {
       const uint8_t *srcp = vsapi->getReadPtr(src, plane);
             uint8_t *dstp = frameData->paddedp[plane];
 
@@ -341,7 +341,7 @@ static void VS_CC copyPad(const VSFrameRef *src, FrameData *frameData, int dh, i
       const int dst_width = frameData->padded_width[plane];
 
       // Copy.
-      if (!dh) {
+      if (!d->dh) {
          for (int y = off; y < src_height; y += 2) {
             memcpy(dstp + 32 + (6+y)*dst_stride,
                    srcp + y*src_stride,
@@ -662,11 +662,11 @@ void evalFunc_0(void **instanceData, FrameData *frameData)
    }
 
    // And now the actual work.
-   for (int b=0; b<3; ++b)
+   for (int b = 0; b < d->vi.format->numPlanes; ++b)
    {
       if ((b == 0 && !d->Y) || 
-         (b == 1 && !d->U) ||
-         (b == 2 && !d->V))
+          (b == 1 && !d->U) ||
+          (b == 2 && !d->V))
          continue;
 
       const uint8_t *srcp = frameData->paddedp[b];
@@ -964,11 +964,11 @@ void evalFunc_1(void **instanceData, FrameData *frameData)
          expf = e0_m16_SSE2;
    }
 
-   for (int b=0; b<3; ++b)
+   for (int b = 0; b < d->vi.format->numPlanes; ++b)
    {
       if ((b == 0 && !d->Y) || 
-         (b == 1 && !d->U) ||
-         (b == 2 && !d->V))
+          (b == 1 && !d->U) ||
+          (b == 2 && !d->V))
          continue;
 
       const uint8_t *srcp = frameData->paddedp[b];
@@ -1032,7 +1032,7 @@ static const VSFrameRef *VS_CC nnedi3GetFrame(int n, int activationReason, void 
 
       FrameData *frameData = malloc(sizeof(FrameData));
 
-      for (int plane = 0; plane < 3; plane++) {
+      for (int plane = 0; plane < d->vi.format->numPlanes; plane++) {
          const int min_pad = 10;
          const int min_alignment = 16;
 
@@ -1057,7 +1057,7 @@ static const VSFrameRef *VS_CC nnedi3GetFrame(int n, int activationReason, void 
       VS_ALIGNED_MALLOC(&frameData->temp, 2048 * sizeof(float), 16);
 
       // Copy src to a padded "frame" in frameData and mirror the edges.
-      copyPad(src, frameData, d->dh, field_n, vsapi);
+      copyPad(src, frameData, instanceData, field_n, vsapi);
 
 
       // Handles prescreening and probably the cubic interpolation.
@@ -1068,7 +1068,7 @@ static const VSFrameRef *VS_CC nnedi3GetFrame(int n, int activationReason, void 
 
 
       // Clean up.
-      for (int plane = 0; plane < 3; plane++) {
+      for (int plane = 0; plane < d->vi.format->numPlanes; plane++) {
          VS_ALIGNED_FREE(frameData->paddedp[plane]);
          VS_ALIGNED_FREE(frameData->lcount[plane]);
       }
@@ -1112,9 +1112,8 @@ static void VS_CC nnedi3Create(const VSMap *in, VSMap *out, void *userData, VSCo
    d.vi = *vsapi->getVideoInfo(d.node);
 
    if (!d.vi.format || d.vi.format->sampleType != stInteger
-                    || d.vi.format->bitsPerSample != 8
-                    || d.vi.format->colorFamily != cmYUV) {
-      vsapi->setError(out, "nnedi3: only constant format 8 bit integer YUV input supported");
+                    || d.vi.format->bitsPerSample != 8) {
+      vsapi->setError(out, "nnedi3: only constant format 8 bit integer input supported");
       vsapi->freeNode(d.node);
       return;
    }
