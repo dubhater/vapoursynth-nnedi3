@@ -4,6 +4,12 @@ SECTION_RODATA
 sign_bits_f times 4 dd 0x7FFFFFFF
 ones_f      times 4 dd 1.0
 
+ub_1     times 16 db 1
+w_19     times 8  dw 19
+w_3      times 8  dw 3
+w_254    times 8  dw 254
+uw_16    times 8  dw 16
+
 
 SECTION .text
 
@@ -45,7 +51,6 @@ cglobal uc2s48_SSE2, 3, 4, 8
 
    RET
 
-
 INIT_XMM
 cglobal uc2s64_SSE2, 3, 3, 8
    pxor m7, m7
@@ -83,7 +88,6 @@ cglobal uc2s64_SSE2, 3, 3, 8
    mova [r2 + 112], m0
 
    RET
-
 
 ; parameters:
 ; const float *datai, const float *weights, uint8_t *d
@@ -259,3 +263,72 @@ cglobal computeNetwork0new_SSE2, 3, 3, 8
    mov [r2],r1d
    RET
 
+; parameters:
+; const uint8_t *tempu, int width, uint8_t *dstp, const uint8_t *src3p, const int src_pitch
+; r0 - tempu
+; r1 - width
+; r2 - dstp
+; r3 - src3p
+; r4 - src_pitch
+INIT_XMM
+cglobal processLine0_SSE2, 5, 6, 8
+   lea r5,[r3+r4*4]
+   pxor m6,m6
+   pxor m7,m7
+xloop:
+   mova m0,[r3+r4*2]
+   mova m1,[r5]
+   mova m2,m0
+   mova m3,m1
+   punpcklbw m0,m7
+   punpckhbw m2,m7
+   punpcklbw m1,m7
+   punpckhbw m3,m7
+   paddw m0,m1
+   paddw m2,m3
+   pmullw m0,[w_19]
+   pmullw m2,[w_19]
+   mova m1,[r3]
+   mova m3,[r5+r4*2]
+   mova m4,m1
+   mova m5,m3
+   punpcklbw m1,m7
+   punpckhbw m4,m7
+   punpcklbw m3,m7
+   punpckhbw m5,m7
+   paddw m1,m3
+   paddw m4,m5
+   pmullw m1,[w_3]
+   pmullw m4,[w_3]
+   mova m3,[r0]
+   psubusw m0,m1
+   psubusw m2,m4
+   pcmpeqb m3,[ub_1]
+   paddusw m0,[uw_16]
+   paddusw m2,[uw_16]
+   mova m1,m3
+   pcmpeqb m4,m4
+   psrlw m0,5
+   psrlw m2,5
+   pxor m1,m4
+   pminsw m0,[w_254]
+   pminsw m2,[w_254]
+   mova m5,m1
+   packuswb m0,m2
+   pand m5,[ub_1]
+   pand m0,m3
+   psadbw m5,m7
+   por m0,m1
+   mova m2,m5
+   psrldq m5,8
+   mova [r2],m0
+   paddusw m5,m2
+   paddusw m6,m5
+   add r3,16
+   add r5,16
+   add r0,16
+   add r2,16
+   sub r1,16
+   jnz xloop
+   movd eax,m6
+   RET

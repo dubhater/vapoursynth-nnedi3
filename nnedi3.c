@@ -17,6 +17,7 @@
 extern void nnedi3_uc2s48_SSE2(const uint8_t *t, const int pitch, float *pf);
 extern void nnedi3_uc2s64_SSE2(const uint8_t *t, const int pitch, float *p);
 extern void nnedi3_computeNetwork0new_SSE2(const float *datai, const float *weights, uint8_t *d);
+extern int32_t nnedi3_processLine0_SSE2(const uint8_t *tempu, int width, uint8_t *dstp, const uint8_t *src3p, const int src_pitch);
 
 
 typedef struct {
@@ -56,7 +57,7 @@ typedef struct {
 
    int field[3];
 
-   int *lcount[3];
+   int32_t *lcount[3];
    float *input;
    float *temp;
 } FrameData;
@@ -527,14 +528,27 @@ void uc2s48_C(const uint8_t *t, const int pitch, float *pf)
 
 #define CB2(n) max(min((n),254),0)
 
-int processLine0_SSE2(const uint8_t *tempu, int width, uint8_t *dstp,
+int32_t processLine0_maybeSSE2(const uint8_t *tempu, int width, uint8_t *dstp,
    const uint8_t *src3p, const int src_pitch) {
-   // Returning something only to silence a warning.
-   return 0;
+   int32_t count;
+   const int remain = width & 15;
+   width -= remain;
+   if (width)
+      count = nnedi3_processLine0_SSE2(tempu, width, dstp, src3p, src_pitch);
+   for (int x = width; x < width + remain; ++x) {
+      if (tempu[x]) {
+         dstp[x] = CB2((19*(src3p[x+src_pitch*2]+src3p[x+src_pitch*4])-
+            3*(src3p[x]+src3p[x+src_pitch*6])+16)>>5);
+      } else {
+         dstp[x] = 255;
+         ++count;
+      }
+   }
+   return count;
 }
 
 
-int processLine0_C(const uint8_t *tempu, int width, uint8_t *dstp,
+int32_t processLine0_C(const uint8_t *tempu, int width, uint8_t *dstp,
    const uint8_t *src3p, const int src_pitch)
 {
    int count = 0;
@@ -552,6 +566,7 @@ int processLine0_C(const uint8_t *tempu, int width, uint8_t *dstp,
    return count;
 }
 
+#undef CB2
 
 // new prescreener functions
 
@@ -613,12 +628,12 @@ void evalFunc_0(void **instanceData, FrameData *frameData)
 
    void (*uc2s)(const uint8_t*, const int, float*);
    void (*computeNetwork0)(const float*, const float*, uint8_t *d);
-   int (*processLine0)(const uint8_t*, int, uint8_t*, const uint8_t*, const int);
+   int32_t (*processLine0)(const uint8_t*, int, uint8_t*, const uint8_t*, const int);
 
    if (opt == 1)
       processLine0 = processLine0_C;
    else
-      processLine0 = processLine0_SSE2;
+      processLine0 = processLine0_maybeSSE2;
 
    if (pscrn < 2) // original prescreener
    {
@@ -687,7 +702,7 @@ void evalFunc_0(void **instanceData, FrameData *frameData)
       srcp += ystart*src_stride;
       dstp += (ystart-6)*dst_stride-32;
       const uint8_t *src3p = srcp-src_stride*3;
-      int *lcount = frameData->lcount[b]-6;
+      int32_t *lcount = frameData->lcount[b]-6;
       if (d->pscrn == 1) // original
       {
          for (int y=ystart; y<ystop; y+=2)
@@ -1047,8 +1062,8 @@ static const VSFrameRef *VS_CC nnedi3GetFrame(int n, int activationReason, void 
          frameData->dstp[plane] = vsapi->getWritePtr(dst, plane);
          frameData->dst_stride[plane] = vsapi->getStride(dst, plane);
 
-         VS_ALIGNED_MALLOC(&frameData->lcount[plane], dst_height * sizeof(int), 16);
-         memset(frameData->lcount[plane], 0, dst_height * sizeof(int));
+         VS_ALIGNED_MALLOC(&frameData->lcount[plane], dst_height * sizeof(int32_t), 16);
+         memset(frameData->lcount[plane], 0, dst_height * sizeof(int32_t));
 
          frameData->field[plane] = field_n;
       }
