@@ -18,6 +18,7 @@ extern void nnedi3_uc2s48_SSE2(const uint8_t *t, const int pitch, float *pf);
 extern void nnedi3_uc2s64_SSE2(const uint8_t *t, const int pitch, float *p);
 extern void nnedi3_computeNetwork0new_SSE2(const float *datai, const float *weights, uint8_t *d);
 extern int32_t nnedi3_processLine0_SSE2(const uint8_t *tempu, int width, uint8_t *dstp, const uint8_t *src3p, const int src_pitch);
+extern void nnedi3_weightedAvgElliottMul5_m16_SSE2(const float *w, const int n, float *mstd);
 
 
 typedef struct {
@@ -885,8 +886,6 @@ void e2_m16_C(float *s, const int n)
 __declspec(align(16)) const float min_weight_sum[4] = { 1e-10f, 1e-10f, 1e-10f, 1e-10f };
 
 
-void weightedAvgElliottMul5_m16_SSE2(const float *w, const int n, float *mstd) {
-}
 
 
 void weightedAvgElliottMul5_m16_C(const float *w, const int n, float *mstd)
@@ -933,7 +932,7 @@ void evalFunc_1(void **instanceData, FrameData *frameData)
    if (opt == 1)
       wae5 = weightedAvgElliottMul5_m16_C;
    else
-      wae5 = weightedAvgElliottMul5_m16_SSE2;
+      wae5 = nnedi3_weightedAvgElliottMul5_m16_SSE2;
 
    if (fapprox & 2) // use int16 dot products
    {

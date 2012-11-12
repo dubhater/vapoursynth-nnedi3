@@ -10,6 +10,9 @@ w_3      times 8  dw 3
 w_254    times 8  dw 254
 uw_16    times 8  dw 16
 
+min_weight_sum times 4 dd 1.0e-10
+five_f         times 4 dd 5.0
+
 
 SECTION .text
 
@@ -332,3 +335,82 @@ xloop:
    jnz xloop
    movd eax,m6
    RET
+
+
+; parameters:
+; const float *w, const int n, float *mstd
+INIT_XMM
+cglobal weightedAvgElliottMul5_m16_SSE2, 3, 5, 8
+   ;push edi ; why?
+   lea r3,[r0+r1*4]
+   xor r4,r4
+   xorps m0,m0 ; sum w
+   xorps m1,m1 ; sum w*v
+nloop:
+   movaps m2,[r0+r4*4]
+   movaps m3,[r0+r4*4+16]
+   movaps m4,[r3+r4*4]
+   movaps m5,[r3+r4*4+16]
+   addps m0,m2
+   movaps m6,m4
+   movaps m7,m5
+   addps m0,m3
+   andps m4,[sign_bits_f]
+   andps m5,[sign_bits_f]
+   addps m4,[ones_f]
+   addps m5,[ones_f]
+   rcpps m4,m4
+   rcpps m5,m5
+   mulps m6,m4
+   mulps m7,m5
+   mulps m6,m2
+   mulps m7,m3
+   addps m1,m6
+   addps m1,m7
+   movaps m2,[r0+r4*4+32]
+   movaps m3,[r0+r4*4+48]
+   movaps m4,[r3+r4*4+32]
+   movaps m5,[r3+r4*4+48]
+   addps m0,m2
+   movaps m6,m4
+   movaps m7,m5
+   addps m0,m3
+   andps m4,[sign_bits_f]
+   andps m5,[sign_bits_f]
+   addps m4,[ones_f]
+   addps m5,[ones_f]
+   rcpps m4,m4
+   rcpps m5,m5
+   mulps m6,m4
+   mulps m7,m5
+   mulps m6,m2
+   mulps m7,m3
+   addps m1,m6
+   addps m1,m7
+   add r4,16
+   sub r1,16
+   jnz nloop
+   movhlps m2,m0
+   movhlps m3,m1
+   addps m0,m2
+   addps m1,m3
+   pshuflw m2,m0,14
+   pshuflw m3,m1,14
+   addss m0,m2
+   addss m1,m3
+   comiss m0,[min_weight_sum]
+   jbe nodiv
+   mulss m1,[five_f]
+   rcpss m0,m0
+   mulss m1,m0
+   jmp finish
+nodiv:
+   xorps m1,m1
+finish:
+   mulss m1,[r2+4]
+   addss m1,[r2]
+   addss m1,[r2+12]
+   movss [r2+12],m1
+   ;pop edi
+   RET
+
