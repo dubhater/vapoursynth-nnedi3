@@ -16,6 +16,7 @@
 // Functions implemented in nnedi3.asm
 extern void nnedi3_uc2s48_SSE2(const uint8_t *t, const int pitch, float *pf);
 extern void nnedi3_uc2s64_SSE2(const uint8_t *t, const int pitch, float *p);
+extern void nnedi3_computeNetwork0new_SSE2(const float *datai, const float *weights, uint8_t *d);
 
 
 typedef struct {
@@ -565,8 +566,6 @@ void uc2s64_C(const uint8_t *t, const int pitch, float *p)
 }
 
 
-void computeNetwork0new_SSE2(const float *datai, const float *weights, uint8_t *d) {
-}
 
 
 void computeNetwork0new_C(const float *datai, const float *weights, uint8_t *d)
@@ -659,7 +658,7 @@ void evalFunc_0(void **instanceData, FrameData *frameData)
       if (opt == 1)
          computeNetwork0 = computeNetwork0new_C;
       else
-         computeNetwork0 = computeNetwork0new_SSE2;
+         computeNetwork0 = nnedi3_computeNetwork0new_SSE2;
    }
 
    // And now the actual work.
