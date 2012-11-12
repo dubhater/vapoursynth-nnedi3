@@ -13,6 +13,10 @@
 #define max(a, b)  (((a) > (b)) ? (a) : (b))
 
 
+// Functions implemented in nnedi3.asm
+extern void nnedi3_uc2s48_SSE2(const uint8_t *t, const int pitch, float *pf);
+
+
 typedef struct {
    const VSNodeRef *node;
    VSVideoInfo vi;
@@ -509,8 +513,6 @@ void uc2f48_C(const uint8_t *t, const int pitch, float *p)
 }
 
 
-void uc2s48_SSE2(const uint8_t *t, const int pitch, float *pf) {
-}
 
 
 void uc2s48_C(const uint8_t *t, const int pitch, float *pf)
@@ -627,7 +629,7 @@ void evalFunc_0(void **instanceData, FrameData *frameData)
          if (opt == 1)
             uc2s = uc2s48_C;
          else
-            uc2s = uc2s48_SSE2;
+            uc2s = nnedi3_uc2s48_SSE2;
 
          if (opt == 1)
             computeNetwork0 = computeNetwork0_i16_C;
