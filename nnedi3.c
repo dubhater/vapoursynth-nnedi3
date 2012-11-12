@@ -15,6 +15,7 @@
 
 // Functions implemented in nnedi3.asm
 extern void nnedi3_uc2s48_SSE2(const uint8_t *t, const int pitch, float *pf);
+extern void nnedi3_uc2s64_SSE2(const uint8_t *t, const int pitch, float *p);
 
 
 typedef struct {
@@ -553,8 +554,6 @@ int processLine0_C(const uint8_t *tempu, int width, uint8_t *dstp,
 
 // new prescreener functions
 
-void uc2s64_SSE2(const uint8_t *t, const int pitch, float *p) {
-}
 
 
 void uc2s64_C(const uint8_t *t, const int pitch, float *p)
@@ -655,7 +654,7 @@ void evalFunc_0(void **instanceData, FrameData *frameData)
       if (opt == 1)
          uc2s = uc2s64_C;
       else
-         uc2s = uc2s64_SSE2;
+         uc2s = nnedi3_uc2s64_SSE2;
 
       if (opt == 1)
          computeNetwork0 = computeNetwork0new_C;
