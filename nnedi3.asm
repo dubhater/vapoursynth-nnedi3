@@ -10,8 +10,12 @@ w_3      times 8  dw 3
 w_254    times 8  dw 254
 uw_16    times 8  dw 16
 
+; If FLT_EPSILON is 1.0e-7, how does this work?
 min_weight_sum times 4 dd 1.0e-10
 five_f         times 4 dd 5.0
+
+; This seems to be the value of FLT_EPSILON, according to clang.
+flt_epsilon_sse times 4 dd 1.0e-7
 
 
 SECTION .text
@@ -278,7 +282,7 @@ cglobal processLine0_SSE2, 5, 6, 8
    lea r5,[r3+r4*4]
    pxor m6,m6
    pxor m7,m7
-xloop:
+.xloop:
    mova m0,[r3+r4*2]
    mova m1,[r5]
    mova m2,m0
@@ -332,7 +336,7 @@ xloop:
    add r0,16
    add r2,16
    sub r1,16
-   jnz xloop
+   jnz .xloop
    movd eax,m6
    RET
 
@@ -346,7 +350,7 @@ cglobal weightedAvgElliottMul5_m16_SSE2, 3, 5, 8
    xor r4,r4
    xorps m0,m0 ; sum w
    xorps m1,m1 ; sum w*v
-nloop:
+.nloop:
    movaps m2,[r0+r4*4]
    movaps m3,[r0+r4*4+16]
    movaps m4,[r3+r4*4]
@@ -389,7 +393,7 @@ nloop:
    addps m1,m7
    add r4,16
    sub r1,16
-   jnz nloop
+   jnz .nloop
    movhlps m2,m0
    movhlps m3,m1
    addps m0,m2
@@ -399,18 +403,90 @@ nloop:
    addss m0,m2
    addss m1,m3
    comiss m0,[min_weight_sum]
-   jbe nodiv
+   jbe .nodiv
    mulss m1,[five_f]
    rcpss m0,m0
    mulss m1,m0
-   jmp finish
-nodiv:
+   jmp .finish
+.nodiv:
    xorps m1,m1
-finish:
+.finish:
    mulss m1,[r2+4]
    addss m1,[r2]
    addss m1,[r2+12]
    movss [r2+12],m1
    ;pop edi
    RET
+
+
+; parameters:
+; const uint8_t *srcp, const int stride, const int xdia, const int ydia, float *mstd, float *inputf
+INIT_XMM
+cglobal extract_m8_i16_SSE2, 6, 7, 8
+   lea r6,[r0+r1*2]
+   pxor m4,m4 ; sum
+   pxor m5,m5 ; sumsq
+   pxor m6,m6
+   PUSH r3
+   PUSH r4
+.yloop:
+   xor r4,r4
+.xloop:
+   movq m0,[r0+r4]
+   movq m1,[r6+r4]
+   mova m2,m0
+   mova m3,m1
+   punpcklbw m0,m6
+   punpcklbw m1,m6
+   psadbw m2,m6
+   psadbw m3,m6
+   mova [r5],m0
+   mova [r5+r2*2],m1
+   pmaddwd m0,m0
+   pmaddwd m1,m1
+   paddd m4,m2
+   paddd m5,m0
+   paddd m4,m3
+   paddd m5,m1
+   add r4,8
+   add r5,16
+   cmp r4,r2
+   jl .xloop
+
+   lea r0,[r0+r1*4]
+   lea r6,[r6+r1*4]
+   lea r5,[r5+r2*2]
+   sub r3,2
+   jnz .yloop
+   POP r4
+   POP r3
+
+   movhlps m1,m5
+   paddd m5,m1
+   mul r2
+   pshuflw m1,m5,14
+   cvtsi2ss m7,r3
+   paddd m5,m1
+   rcpss m7,m7 ; scale
+   cvtdq2ps m4,m4
+   cvtdq2ps m5,m5
+   mulss m4,m7 ; mean
+   mulss m5,m7
+   movss [r4],m4
+   mulss m4,m4
+   subss m5,m4 ; var
+   comiss m5,[flt_epsilon_sse]
+   jbe .novarjmp
+   rsqrtss m5,m5 ; 1.0/std
+   rcpss m4,m5 ; std
+   movss [r4+4],m4
+   movss [r4+8],m5
+   jmp .finish
+.novarjmp:
+   movss [r4+4],m6
+   movss [r4+8],m6
+.finish:
+   movss [r4+12],m6
+   RET
+
 

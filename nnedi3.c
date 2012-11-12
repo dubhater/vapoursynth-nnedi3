@@ -19,6 +19,7 @@ extern void nnedi3_uc2s64_SSE2(const uint8_t *t, const int pitch, float *p);
 extern void nnedi3_computeNetwork0new_SSE2(const float *datai, const float *weights, uint8_t *d);
 extern int32_t nnedi3_processLine0_SSE2(const uint8_t *tempu, int width, uint8_t *dstp, const uint8_t *src3p, const int src_pitch);
 extern void nnedi3_weightedAvgElliottMul5_m16_SSE2(const float *w, const int n, float *mstd);
+extern void nnedi3_extract_m8_i16_SSE2(const uint8_t *srcp, const int stride, const int xdia, const int ydia, float *mstd, float *inputf);
 
 
 typedef struct {
@@ -778,9 +779,6 @@ void extract_m8_C(const uint8_t *srcp, const int stride,
 }
 
 
-void extract_m8_i16_SSE2(const uint8_t *srcp, const int stride, 
-   const int xdia, const int ydia, float *mstd, float *inputf) {
-}
 
 
 void extract_m8_i16_C(const uint8_t *srcp, const int stride, 
@@ -939,7 +937,7 @@ void evalFunc_1(void **instanceData, FrameData *frameData)
       if (opt == 1)
          extract = extract_m8_i16_C;
       else
-         extract = extract_m8_i16_SSE2;
+         extract = nnedi3_extract_m8_i16_SSE2;
       if (opt == 1)
          dotProd = dotProdS_C;
       else
