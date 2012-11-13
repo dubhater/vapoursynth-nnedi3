@@ -22,6 +22,7 @@ extern void nnedi3_weightedAvgElliottMul5_m16_SSE2(const float *w, const int n, 
 extern void nnedi3_extract_m8_i16_SSE2(const uint8_t *srcp, const int stride, const int xdia, const int ydia, float *mstd, float *inputf);
 extern void nnedi3_dotProd_m32_m16_i16_SSE2(const float *dataf, const float *weightsf, float *vals, const int n, const int len, const float *istd);
 extern void nnedi3_e0_m16_SSE2(float *s, const int n);
+extern void nnedi3_castScale_SSE(const float *val, const float *scale, uint8_t *dstp);
 
 
 typedef struct {
@@ -898,8 +899,6 @@ void weightedAvgElliottMul5_m16_C(const float *w, const int n, float *mstd)
 }
 
 
-inline void castScale_SSE(const float *val, const float *scale, uint8_t *dstp) {
-}
 
 
 void evalFunc_1(void **instanceData, FrameData *frameData)
@@ -1007,7 +1006,7 @@ void evalFunc_1(void **instanceData, FrameData *frameData)
                wae5(temp,nns,mstd);
             }
             if (opt > 1)
-               castScale_SSE(mstd,&scale,dstp+x);
+               nnedi3_castScale_SSE(mstd,&scale,dstp+x);
             else
                dstp[x] = min(max((int)(mstd[3]*scale+0.5f),0),255);
          }
