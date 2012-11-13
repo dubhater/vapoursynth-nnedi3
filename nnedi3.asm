@@ -490,3 +490,128 @@ cglobal extract_m8_i16_SSE2, 6, 7, 8
    RET
 
 
+; parameters:
+;  const float *dataf,
+;  const float *weightsf,
+;  float *vals,
+;  const int n,
+;  const int len,
+;  const float *istd
+INIT_XMM
+cglobal dotProd_m32_m16_i16_SSE2, 6, 7, 8
+   mov r6,r0 ; r6, r0 - dataf
+   PUSH r2   ; r2 - vals
+   PUSH r3   ; r3 - n
+.nloop:
+   mov r0,r6 ; r0, r6 - dataf
+   pxor m0,m0
+   pxor m1,m1
+   pxor m2,m2
+   pxor m3,m3
+   ; original value of r4 needs to be restored here
+   PUSH r4   ; r4 - len
+.lloop:
+   mova m4,[r0] ; r0 - dataf
+   mova m5,m4
+   mova m6,m4
+   mova m7,m4
+   pmaddwd m4,[r1] ; r1 - weightsf
+   pmaddwd m5,[r1+16]
+   pmaddwd m6,[r1+32]
+   pmaddwd m7,[r1+48]
+   paddd m0,m4
+   paddd m1,m5
+   paddd m2,m6
+   paddd m3,m7
+   mova m4,[r0+16] ; r0 - dataf
+   mova m5,m4
+   mova m6,m4
+   mova m7,m4
+   pmaddwd m4,[r1+64] ; r1 - weightsf
+   pmaddwd m5,[r1+80]
+   pmaddwd m6,[r1+96]
+   pmaddwd m7,[r1+112]
+   paddd m0,m4
+   paddd m1,m5
+   paddd m2,m6
+   paddd m3,m7
+   mova m4,[r0+32] ; r0 - dataf
+   mova m5,m4
+   mova m6,m4
+   mova m7,m4
+   pmaddwd m4,[r1+128] ; r1 - weightsf
+   pmaddwd m5,[r1+144]
+   pmaddwd m6,[r1+160]
+   pmaddwd m7,[r1+176]
+   paddd m0,m4
+   paddd m1,m5
+   paddd m2,m6
+   paddd m3,m7
+   mova m4,[r0+48] ; r0 - dataf
+   mova m5,m4
+   mova m6,m4
+   mova m7,m4
+   pmaddwd m4,[r1+192] ; r1 - weightsf
+   pmaddwd m5,[r1+208]
+   pmaddwd m6,[r1+224]
+   pmaddwd m7,[r1+240]
+   paddd m0,m4
+   paddd m1,m5
+   paddd m2,m6
+   paddd m3,m7
+   add r0,64 ; r0 - dataf
+   add r1,256 ; r1 - weightsf
+   sub r4,32 ; r4 - len
+   jnz .lloop
+   POP r4 ; r4 - len (original)
+   mova m4,m0
+   mova m5,m2
+   punpcklqdq m0,m1
+   punpcklqdq m2,m3
+   punpckhqdq m4,m1
+   punpckhqdq m5,m3
+   paddd m0,m4
+   paddd m2,m5
+   mova m6,m0
+   shufps m0,m2,136
+   shufps m6,m2,221
+   paddd m6,m0
+   mova [r2],m6 ; r2 - vals
+   add r2,16 ; r2 - vals
+   sub r3,4 ; r3 - n
+   jnz .nloop
+   POP r3 ; r3 - n (original)
+   POP r2 ; r2 - vals (original)
+   movss m7,[r5] ; r5 - istd
+   pshufd m7,m7,0
+   xor r5,r5 ; r5 - 0
+.aloop:
+   mova m0,[r2+r5*4] ; r2 - vals (original)
+   mova m1,[r2+r5*4+16]
+   mova m2,[r2+r5*4+32]
+   mova m3,[r2+r5*4+48]
+   cvtdq2ps m0,m0
+   cvtdq2ps m1,m1
+   cvtdq2ps m2,m2
+   cvtdq2ps m3,m3
+   mulps m0,[r1+r5*8] ; r1 - weightsf
+   mulps m1,[r1+r5*8+32]
+   mulps m2,[r1+r5*8+64]
+   mulps m3,[r1+r5*8+96]
+   mulps m0,m7
+   mulps m1,m7
+   mulps m2,m7
+   mulps m3,m7
+   addps m0,[r1+r5*8+16] ; r1 - weightsf
+   addps m1,[r1+r5*8+48]
+   addps m2,[r1+r5*8+80]
+   addps m3,[r1+r5*8+112]
+   movaps [r2+r5*4],m0 ; r2 - vals
+   movaps [r2+r5*4+16],m1
+   movaps [r2+r5*4+32],m2
+   movaps [r2+r5*4+48],m3
+   add r5,16
+   sub r3,16 ; r3 - n
+   jnz .aloop
+   RET
+

@@ -20,6 +20,7 @@ extern void nnedi3_computeNetwork0new_SSE2(const float *datai, const float *weig
 extern int32_t nnedi3_processLine0_SSE2(const uint8_t *tempu, int width, uint8_t *dstp, const uint8_t *src3p, const int src_pitch);
 extern void nnedi3_weightedAvgElliottMul5_m16_SSE2(const float *w, const int n, float *mstd);
 extern void nnedi3_extract_m8_i16_SSE2(const uint8_t *srcp, const int stride, const int xdia, const int ydia, float *mstd, float *inputf);
+extern void nnedi3_dotProd_m32_m16_i16_SSE2(const float *dataf, const float *weightsf, float *vals, const int n, const int len, const float *istd);
 
 
 typedef struct {
@@ -443,9 +444,6 @@ void dotProdS_C(const float *dataf, const float *weightsf,
 }
 
 
-__declspec(naked) void dotProd_m32_m16_i16_SSE2(const float *dataf, const float *weightsf, 
-   float *vals, const int n, const int len, const float *istd) {
-}
 
 
 __declspec(naked) void dotProd_m48_m16_i16_SSE2(const float *dataf, const float *weightsf, 
@@ -941,7 +939,7 @@ void evalFunc_1(void **instanceData, FrameData *frameData)
       if (opt == 1)
          dotProd = dotProdS_C;
       else
-         dotProd = (asize%48) ? dotProd_m32_m16_i16_SSE2 : dotProd_m48_m16_i16_SSE2;
+         dotProd = (asize%48) ? nnedi3_dotProd_m32_m16_i16_SSE2 : dotProd_m48_m16_i16_SSE2;
    }
    else // use float dot products
    {
