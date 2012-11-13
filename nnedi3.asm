@@ -17,6 +17,11 @@ five_f         times 4 dd 5.0
 ; This seems to be the value of FLT_EPSILON, according to clang.
 flt_epsilon_sse times 4 dd 1.0e-7
 
+exp_lo   times 4 dd -80.0
+exp_hi   times 4 dd  80.0
+e0_mult  times 4 dd 12102203.161561486 ; (1.0/ln(2))*(2^23)
+e0_bias  times 4 dd 1064866805.0 ; (2^23)*127.0-486411.0
+
 
 SECTION .text
 
@@ -614,4 +619,48 @@ cglobal dotProd_m32_m16_i16_SSE2, 6, 7, 8
    sub r3,16 ; r3 - n
    jnz .aloop
    RET
+
+
+; parameters:
+;  float *s,
+;  const int n
+INIT_XMM
+cglobal e0_m16_SSE2, 2, 2, 4
+   ;mov r0,[esp+4]
+   ;mov r1,[esp+8]
+.eloop16:
+   movaps m0,[r0]
+   movaps m1,[r0+16]
+   movaps m2,[r0+32]
+   movaps m3,[r0+48]
+   minps m0,[exp_hi]
+   minps m1,[exp_hi]
+   minps m2,[exp_hi]
+   minps m3,[exp_hi]
+   maxps m0,[exp_lo]
+   maxps m1,[exp_lo]
+   maxps m2,[exp_lo]
+   maxps m3,[exp_lo]
+   mulps m0,[e0_mult]
+   mulps m1,[e0_mult]
+   mulps m2,[e0_mult]
+   mulps m3,[e0_mult]
+   addps m0,[e0_bias]
+   addps m1,[e0_bias]
+   addps m2,[e0_bias]
+   addps m3,[e0_bias]
+   cvtps2dq m0,m0
+   cvtps2dq m1,m1
+   cvtps2dq m2,m2
+   cvtps2dq m3,m3
+   movaps [r0],m0
+   movaps [r0+16],m1
+   movaps [r0+32],m2
+   movaps [r0+48],m3
+   add r0,64
+   sub r1,16
+   jnz .eloop16
+   RET
+
+
 

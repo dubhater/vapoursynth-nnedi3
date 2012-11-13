@@ -21,6 +21,7 @@ extern int32_t nnedi3_processLine0_SSE2(const uint8_t *tempu, int width, uint8_t
 extern void nnedi3_weightedAvgElliottMul5_m16_SSE2(const float *w, const int n, float *mstd);
 extern void nnedi3_extract_m8_i16_SSE2(const uint8_t *srcp, const int stride, const int xdia, const int ydia, float *mstd, float *inputf);
 extern void nnedi3_dotProd_m32_m16_i16_SSE2(const float *dataf, const float *weightsf, float *vals, const int n, const int len, const float *istd);
+extern void nnedi3_e0_m16_SSE2(float *s, const int n);
 
 
 typedef struct {
@@ -822,8 +823,6 @@ __declspec(align(16)) const float e0_bias[4] = { // (2^23)*127.0-486411.0
    1064866805.0f, 1064866805.0f, 1064866805.0f, 1064866805.0f };
 
 
-void e0_m16_SSE2(float *s, const int n) {
-}
 
 
 void e0_m16_C(float *s, const int n)
@@ -971,7 +970,7 @@ void evalFunc_1(void **instanceData, FrameData *frameData)
       if (opt == 1)
          expf = e0_m16_C;
       else
-         expf = e0_m16_SSE2;
+         expf = nnedi3_e0_m16_SSE2;
    }
 
    for (int b = 0; b < d->vi.format->numPlanes; ++b)
