@@ -396,19 +396,10 @@ static void VS_CC copyPad(const VSFrameRef *src, FrameData *frameData, void **in
 }
 
 
-void elliott_SSE2(float *data, const int n) {
-}
-
-
 void elliott_C(float *data, const int n)
 {
    for (int i=0; i<n; ++i)
       data[i] = data[i]/(1.0f+fabsf(data[i]));
-}
-
-
-void dotProd_SSE2(const float *data, const float *weights, 
-   float *vals, const int n, const int len, const float *scale) {
 }
 
 
@@ -422,11 +413,6 @@ void dotProd_C(const float *data, const float *weights,
          sum += data[j]*weights[i*len+j];
       vals[i] = sum*scale[0]+weights[n*len+i];
    }
-}
-
-
-void dotProdS_SSE2(const float *dataf, const float *weightsf, 
-   float *vals, const int n, const int len, const float *scale) {
 }
 
 
