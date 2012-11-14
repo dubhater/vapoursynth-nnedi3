@@ -1153,15 +1153,11 @@ static void VS_CC nnedi3Create(const VSMap *in, VSMap *out, void *userData, VSCo
       d.pscrn = 2;
    }
 
-   // FIXME: remove the preprocessor directives when you get asm functions.
-#if 0
+   // FIXME: change the default to 2 when the asm functions are ready.
    d.opt = vsapi->propGetInt(in, "opt", 0, &err);
    if (err) {
-      d.opt = 2;
+      d.opt = 1;
    }
-#else
-   d.opt = 1;
-#endif
    
    d.fapprox = vsapi->propGetInt(in, "fapprox", 0, &err);
    if (err) {
@@ -1217,13 +1213,11 @@ static void VS_CC nnedi3Create(const VSMap *in, VSMap *out, void *userData, VSCo
       return;
    }
 
-#if 0
    if (d.opt < 1 || d.opt > 2) {
       vsapi->setError(out, "nnedi3: opt must be 1 or 2");
       vsapi->freeNode(d.node);
       return;
    }
-#endif
 
    if (d.fapprox < 0 || d.fapprox > 15) {
       vsapi->setError(out, "nnedi3: fapprox must be between 0 and 15 (inclusive)");
@@ -1255,6 +1249,6 @@ static void VS_CC nnedi3Create(const VSMap *in, VSMap *out, void *userData, VSCo
 
 VS_EXTERNAL_API(void) VapourSynthPluginInit(VSConfigPlugin configFunc, VSRegisterFunction registerFunc, VSPlugin *plugin) {
    configFunc("com.deinterlace.nnedi3", "nnedi3", "VapourSynth nnedi3 Filter", VAPOURSYNTH_API_VERSION, 1, plugin);
-   registerFunc("nnedi3", "clip:clip;field:int;dh:int:opt;Y:int:opt;U:int:opt;V:int:opt;nsize:int:opt;nns:int:opt;qual:int:opt;etype:int:opt;pscrn:int:opt;fapprox:int:opt;", nnedi3Create, 0, plugin);
+   registerFunc("nnedi3", "clip:clip;field:int;dh:int:opt;Y:int:opt;U:int:opt;V:int:opt;nsize:int:opt;nns:int:opt;qual:int:opt;etype:int:opt;pscrn:int:opt;opt:int:opt;fapprox:int:opt;", nnedi3Create, 0, plugin);
 }
 
