@@ -26,7 +26,7 @@ extern void nnedi3_castScale_SSE(const float *val, const float *scale, uint8_t *
 
 
 typedef struct {
-   const VSNodeRef *node;
+   VSNodeRef *node;
    VSVideoInfo vi;
 
    float *weights0;
@@ -113,7 +113,7 @@ extern uint8_t _binary_binary1_0_9_4_bin_start;
 
 static void VS_CC nnedi3Init(VSMap *in, VSMap *out, void **instanceData, VSNode *node, VSCore *core, const VSAPI *vsapi) {
    nnedi3Data *d = (nnedi3Data *) * instanceData;
-   vsapi->setVideoInfo(&d->vi, node);
+   vsapi->setVideoInfo(&d->vi, 1, node);
 
    const float* bdata = (const float*)&_binary_binary1_0_9_4_bin_start;
 
@@ -1098,7 +1098,6 @@ static void VS_CC nnedi3Free(void *instanceData, VSCore *core, const VSAPI *vsap
 static void VS_CC nnedi3Create(const VSMap *in, VSMap *out, void *userData, VSCore *core, const VSAPI *vsapi) {
    nnedi3Data d;
    nnedi3Data *data;
-   const VSNodeRef *cref;
    int err;
 
    // Get a clip reference from the input arguments. This must be freed later.
@@ -1240,9 +1239,7 @@ static void VS_CC nnedi3Create(const VSMap *in, VSMap *out, void *userData, VSCo
    data = malloc(sizeof(d));
    *data = d;
 
-   cref = vsapi->createFilter(in, out, "nnedi3", nnedi3Init, nnedi3GetFrame, nnedi3Free, fmParallel, 0, data, core);
-   vsapi->propSetNode(out, "clip", cref, 0);
-   vsapi->freeNode(cref);
+   vsapi->createFilter(in, out, "nnedi3", nnedi3Init, nnedi3GetFrame, nnedi3Free, fmParallel, 0, data, core);
    return;
 }
 
