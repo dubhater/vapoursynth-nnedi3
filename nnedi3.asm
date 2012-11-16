@@ -470,9 +470,13 @@ cglobal extract_m8_i16_SSE2, 6, 7, 8
 
    movhlps m1,m5
    paddd m5,m1
-   mul r2
+   ; multiply r3d by r2d
+   movd m2,r2d
+   movd m3,r3d
+   pmuludq m2,m3
+   cvtdq2ps m7,m2
+
    pshuflw m1,m5,14
-   cvtsi2ss m7,r3
    paddd m5,m1
    rcpss m7,m7 ; scale
    cvtdq2ps m4,m4
