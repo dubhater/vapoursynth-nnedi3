@@ -31,6 +31,19 @@ e1_c0    times 4 dd 1.00035
 e1_c1    times 4 dd 0.701277797
 e1_c2    times 4 dd 0.237348593
 
+am_0p5      times 4 dd 0.5 ; this is the same as sse_half...
+am_1        times 4 dd 1.0 ; this is the same as ones_f... why duplicate?
+exp_rln2    times 4 dd 1.442695041 ; e1_scale...
+exp_p0      times 4 dd 1.261771931e-4
+exp_p1      times 4 dd 3.029944077e-2
+exp_q0      times 4 dd 3.001985051e-6
+exp_q1      times 4 dd 2.524483403e-3
+exp_q2      times 4 dd 2.272655482e-1
+exp_q3      times 4 dd 2.000000000 ; seriously...
+exp_c1      times 4 dd 6.931457520e-1
+exp_c2      times 4 dd 1.428606820e-6
+epi32_1     times 4 dd 1
+epi32_0x7f  times 4 dd 0x7F
 
 SECTION .text
 
@@ -1194,4 +1207,59 @@ cglobal e1_m16_SSE2, 2, 2, 6
    add r0,32
    sub r1,8
    jnz .eloop8
+   RET
+
+
+; parameters:
+;  float *s,
+;  const int n
+INIT_XMM
+cglobal e2_m16_SSE2, 2, 2, 7
+.eloop4:
+   movaps m0,[r0]
+   minps m0,[exp_hi]
+   maxps m0,[exp_lo]
+   movaps m1,[exp_rln2]
+   mulps m1,m0
+   xorps m2,m2
+   addps m1,[am_0p5]
+   cmpnltps m2,m1
+   pand m2,[epi32_1]
+   cvttps2dq m1,m1
+   movaps m4,[exp_c2]
+   psubd m1,m2
+   movaps m5,[exp_c1]
+   cvtdq2ps m3,m1
+   mulps m4,m3
+   mulps m5,m3
+   movaps m6,[exp_q0]
+   subps m0,m4
+   movaps m4,[exp_p0]
+   subps m0,m5
+   paddd m1,[epi32_0x7f]
+   movaps m2,m0
+   mulps m0,m0
+   mulps m6,m0
+   mulps m4,m0
+   addps m6,[exp_q1]
+   addps m4,[exp_p1]
+   mulps m6,m0
+   mulps m4,m0
+   addps m6,[exp_q2]
+   mulps m4,m2
+   mulps m6,m0
+   movaps m0,[am_1]
+   addps m2,m4
+   addps m6,[exp_q3]
+   pslld m1,23
+   subps m6,m2
+   rcpps m6,m6
+   mulps m2,m6
+   addps m2,m2
+   addps m0,m2
+   mulps m0,m1
+   movaps [r0],m0
+   add r0,16
+   sub r1,4
+   jnz .eloop4
    RET

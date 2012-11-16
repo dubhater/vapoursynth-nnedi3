@@ -27,6 +27,7 @@ extern void nnedi3_computeNetwork0_SSE2(const float *input, const float *weights
 extern void nnedi3_uc2f48_SSE2(const uint8_t *t, const int pitch, float *p);
 extern void nnedi3_computeNetwork0_i16_SSE2(const float *inputf, const float *weightsf, uint8_t *d);
 extern void nnedi3_e1_m16_SSE2(float *s, const int n);
+extern void nnedi3_e2_m16_SSE2(float *s, const int n);
 
 
 typedef struct {
@@ -848,8 +849,6 @@ void e1_m16_C(float *s, const int n)
 }
 
 
-void e2_m16_SSE2(float *s, const int n) {
-}
 
 
 void e2_m16_C(float *s, const int n)
@@ -937,7 +936,7 @@ void evalFunc_1(void **instanceData, FrameData *frameData)
       if (opt == 1)
          expf = e2_m16_C;
       else
-         expf = e2_m16_SSE2;
+         expf = nnedi3_e2_m16_SSE2;
    }
    else if ((fapprox & 12) == 4) // use faster exp
    {
