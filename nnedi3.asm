@@ -986,3 +986,159 @@ cglobal uc2f48_SSE2, 3, 3, 7
    movaps [r2+160],m3
    movaps [r2+176],m5
    RET
+
+
+; parameters:
+;  const float *inputf,
+;  const float *weightsf,
+;  uint8_t *d
+INIT_XMM
+cglobal computeNetwork0_i16_SSE2, 3, 4, 8
+   mov r3,1
+   movdqa m0,[r0]
+   movdqa m1,m0
+   movdqa m2,m0
+   movdqa m3,m0
+   pmaddwd m0,[r1]
+   pmaddwd m1,[r1+16]
+   pmaddwd m2,[r1+32]
+   pmaddwd m3,[r1+48]
+   movdqa m4,[r0+16]
+   movdqa m5,m4
+   movdqa m6,m4
+   movdqa m7,m4
+   pmaddwd m4,[r1+64]
+   pmaddwd m5,[r1+80]
+   pmaddwd m6,[r1+96]
+   pmaddwd m7,[r1+112]
+   paddd m0,m4
+   paddd m1,m5
+   paddd m2,m6
+   paddd m3,m7
+   movdqa m4,[r0+32]
+   movdqa m5,m4
+   movdqa m6,m4
+   movdqa m7,m4
+   pmaddwd m4,[r1+128]
+   pmaddwd m5,[r1+144]
+   pmaddwd m6,[r1+160]
+   pmaddwd m7,[r1+176]
+   paddd m0,m4
+   paddd m1,m5
+   paddd m2,m6
+   paddd m3,m7
+   movdqa m4,[r0+48]
+   movdqa m5,m4
+   movdqa m6,m4
+   movdqa m7,m4
+   pmaddwd m4,[r1+192]
+   pmaddwd m5,[r1+208]
+   pmaddwd m6,[r1+224]
+   pmaddwd m7,[r1+240]
+   paddd m0,m4
+   paddd m1,m5
+   paddd m2,m6
+   paddd m3,m7
+   movdqa m4,[r0+64]
+   movdqa m5,m4
+   movdqa m6,m4
+   movdqa m7,m4
+   pmaddwd m4,[r1+256]
+   pmaddwd m5,[r1+272]
+   pmaddwd m6,[r1+288]
+   pmaddwd m7,[r1+304]
+   paddd m0,m4
+   paddd m1,m5
+   paddd m2,m6
+   paddd m3,m7
+   movdqa m4,[r0+80]
+   movdqa m5,m4
+   movdqa m6,m4
+   movdqa m7,m4
+   pmaddwd m4,[r1+320]
+   pmaddwd m5,[r1+336]
+   pmaddwd m6,[r1+352]
+   pmaddwd m7,[r1+368]
+   paddd m0,m4
+   paddd m1,m5
+   paddd m2,m6
+   paddd m3,m7
+   movdqa m4,m0
+   movdqa m5,m2
+   punpcklqdq m0,m1
+   punpcklqdq m2,m3
+   punpckhqdq m4,m1
+   punpckhqdq m5,m3
+   paddd m0,m4
+   paddd m2,m5
+   movdqa m6,m0
+   shufps m0,m2,136
+   shufps m6,m2,221
+   paddd m0,m6
+   cvtdq2ps m0,m0
+   mulps m0,[r1+384]
+   addps m0,[r1+400]
+   ;// const float t = temp[0];
+   ;// elliott4_SSE(temp);
+   ;// temp[0] = t;
+   movaps m1,m0
+   andps m0,[sign_bits_f_zero_l]
+   addps m0,[ones_f]
+   rcpps m0,m0
+   mulps m0,m1
+   ;//    dotProd4_m4_SSE2(temp,weights+4*49,temp+4,4);
+   pshufd m1,m0,0
+   pshufd m2,m0,85
+   pshufd m3,m0,170
+   pshufd m4,m0,255
+   mulps m1,[r1+416]
+   mulps m2,[r1+416+16]
+   mulps m3,[r1+416+32]
+   mulps m4,[r1+416+48]
+   addps m1,m2
+   addps m3,m4
+   addps m1,m3
+   addps m1,[r1+416+64]
+   ;// elliott4_SSE(temp+4);
+   movaps m7,m1
+   andps m1,[sign_bits_f]
+   movaps m3,m0
+   addps m1,[ones_f]
+   rcpps m1,m1
+   mulps m7,m1
+   ;//    dotProd8_m4_SSE2(temp,weights+4*49+4*5,temp+32,4);
+   pshufd m0,m0,0
+   pshufd m1,m3,85
+   pshufd m2,m3,170
+   pshufd m3,m3,255
+   mulps m0,[r1+496]
+   mulps m1,[r1+496+16]
+   mulps m2,[r1+496+32]
+   mulps m3,[r1+496+48]
+   pshufd m4,m7,0
+   pshufd m5,m7,85
+   pshufd m6,m7,170
+   pshufd m7,m7,255
+   mulps m4,[r1+496+64]
+   mulps m5,[r1+496+80]
+   mulps m6,[r1+496+96]
+   mulps m7,[r1+496+112]
+   addps m0,m1
+   addps m2,m3
+   addps m4,m5
+   addps m6,m7
+   addps m0,m2
+   addps m4,m6
+   addps m0,m4
+
+   addps m0,[r1+496+128]
+   movhlps m1,m0
+   maxps m0,m1
+   pshuflw m1,m0,14
+   comiss m1,m0
+   jbe .finish
+   xor r3,r3
+.finish:
+   mov [r2],r3b
+   RET
+

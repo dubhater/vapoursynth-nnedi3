@@ -25,6 +25,7 @@ extern void nnedi3_e0_m16_SSE2(float *s, const int n);
 extern void nnedi3_castScale_SSE(const float *val, const float *scale, uint8_t *dstp);
 extern void nnedi3_computeNetwork0_SSE2(const float *input, const float *weights, uint8_t *d);
 extern void nnedi3_uc2f48_SSE2(const uint8_t *t, const int pitch, float *p);
+extern void nnedi3_computeNetwork0_i16_SSE2(const float *inputf, const float *weightsf, uint8_t *d);
 
 
 typedef struct {
@@ -470,8 +471,6 @@ void computeNetwork0_C(const float *input, const float *weights, uint8_t *d)
 }
 
 
-void computeNetwork0_i16_SSE2(const float *inputf, const float *weightsf, uint8_t *d) {
-}
 
 
 void computeNetwork0_i16_C(const float *inputf, const float *weightsf, uint8_t *d)
@@ -633,7 +632,7 @@ void evalFunc_0(void **instanceData, FrameData *frameData)
          if (opt == 1)
             computeNetwork0 = computeNetwork0_i16_C;
          else
-            computeNetwork0 = computeNetwork0_i16_SSE2;
+            computeNetwork0 = nnedi3_computeNetwork0_i16_SSE2;
       }
       else
       {
