@@ -24,7 +24,7 @@ Allowed values (ranges are inclusive):
 - opt: 1..2
 - fapprox: 0..15
 
-"opt" defaults to 1 (C routines only) because the few ported asm functions produce borked output.
+"opt" defaults to 1 (C routines only) because not all asm functions are ported yet.
 
 
 Compilation
