@@ -2,6 +2,7 @@
 
 SECTION_RODATA
 sign_bits_f times 4 dd 0x7FFFFFFF
+sign_bits_f_zero_l  dq 0x7FFFFFFF00000000, 0x7FFFFFFF7FFFFFFF
 ones_f      times 4 dd 1.0
 
 ub_1     times 16 db 1
@@ -689,4 +690,232 @@ cglobal castScale_SSE, 3, 3, 1
    xor r1,r1
 .finish:
    mov byte [r2],r1b ; lowest 8 bits of r1
+   RET
+
+
+; parameters:
+;  const float *input,
+;  const float *weights,
+;  uint8_t *d
+INIT_XMM
+cglobal computeNetwork0_SSE2, 3, 4, 8
+   ;//    dotProd48_m4_SSE(input,weights,temp,4);
+   ;mov r0,[esp+4]
+   ;mov r1,[esp+8]
+   mov r3,1
+   movaps m0,[r0]
+   movaps m1,m0
+   movaps m2,m0
+   movaps m3,m0
+   mulps m0,[r1]
+   mulps m1,[r1+16]
+   mulps m2,[r1+32]
+   mulps m3,[r1+48]
+   movaps m4,[r0+16]
+   movaps m5,m4
+   movaps m6,m4
+   movaps m7,m4
+   mulps m4,[r1+64]
+   mulps m5,[r1+80]
+   mulps m6,[r1+96]
+   mulps m7,[r1+112]
+   addps m0,m4
+   addps m1,m5
+   addps m2,m6
+   addps m3,m7
+   movaps m4,[r0+32]
+   movaps m5,m4
+   movaps m6,m4
+   movaps m7,m4
+   mulps m4,[r1+128]
+   mulps m5,[r1+144]
+   mulps m6,[r1+160]
+   mulps m7,[r1+176]
+   addps m0,m4
+   addps m1,m5
+   addps m2,m6
+   addps m3,m7
+   movaps m4,[r0+48]
+   movaps m5,m4
+   movaps m6,m4
+   movaps m7,m4
+   mulps m4,[r1+192]
+   mulps m5,[r1+208]
+   mulps m6,[r1+224]
+   mulps m7,[r1+240]
+   addps m0,m4
+   addps m1,m5
+   addps m2,m6
+   addps m3,m7
+   movaps m4,[r0+64]
+   movaps m5,m4
+   movaps m6,m4
+   movaps m7,m4
+   mulps m4,[r1+256]
+   mulps m5,[r1+272]
+   mulps m6,[r1+288]
+   mulps m7,[r1+304]
+   addps m0,m4
+   addps m1,m5
+   addps m2,m6
+   addps m3,m7
+   movaps m4,[r0+80]
+   movaps m5,m4
+   movaps m6,m4
+   movaps m7,m4
+   mulps m4,[r1+320]
+   mulps m5,[r1+336]
+   mulps m6,[r1+352]
+   mulps m7,[r1+368]
+   addps m0,m4
+   addps m1,m5
+   addps m2,m6
+   addps m3,m7
+   movaps m4,[r0+96]
+   movaps m5,m4
+   movaps m6,m4
+   movaps m7,m4
+   mulps m4,[r1+384]
+   mulps m5,[r1+400]
+   mulps m6,[r1+416]
+   mulps m7,[r1+432]
+   addps m0,m4
+   addps m1,m5
+   addps m2,m6
+   addps m3,m7
+   movaps m4,[r0+112]
+   movaps m5,m4
+   movaps m6,m4
+   movaps m7,m4
+   mulps m4,[r1+448]
+   mulps m5,[r1+464]
+   mulps m6,[r1+480]
+   mulps m7,[r1+496]
+   addps m0,m4
+   addps m1,m5
+   addps m2,m6
+   addps m3,m7
+   movaps m4,[r0+128]
+   movaps m5,m4
+   movaps m6,m4
+   movaps m7,m4
+   mulps m4,[r1+512]
+   mulps m5,[r1+528]
+   mulps m6,[r1+544]
+   mulps m7,[r1+560]
+   addps m0,m4
+   addps m1,m5
+   addps m2,m6
+   addps m3,m7
+   movaps m4,[r0+144]
+   movaps m5,m4
+   movaps m6,m4
+   movaps m7,m4
+   mulps m4,[r1+576]
+   mulps m5,[r1+592]
+   mulps m6,[r1+608]
+   mulps m7,[r1+624]
+   addps m0,m4
+   addps m1,m5
+   addps m2,m6
+   addps m3,m7
+   movaps m4,[r0+160]
+   movaps m5,m4
+   movaps m6,m4
+   movaps m7,m4
+   mulps m4,[r1+640]
+   mulps m5,[r1+656]
+   mulps m6,[r1+672]
+   mulps m7,[r1+688]
+   addps m0,m4
+   addps m1,m5
+   addps m2,m6
+   addps m3,m7
+   movaps m4,[r0+176]
+   movaps m5,m4
+   movaps m6,m4
+   movaps m7,m4
+   mulps m4,[r1+704]
+   mulps m5,[r1+720]
+   mulps m6,[r1+736]
+   mulps m7,[r1+752]
+   addps m0,m4
+   addps m1,m5
+   addps m2,m6
+   addps m3,m7
+   movaps m4,m0
+   movaps m5,m2
+   unpcklpd m0,m1
+   unpcklpd m2,m3
+   unpckhpd m4,m1
+   unpckhpd m5,m3
+   addps m0,m4
+   addps m2,m5
+   movaps m6,m0
+   shufps m0,m2,136
+   shufps m6,m2,221
+   addps m0,m6
+   addps m0,[r1+768]
+   ;// const float t = temp[0];
+   ;// elliott4_SSE(temp);
+   ;// temp[0] = t;
+   movaps m1,m0
+   andps m0,[sign_bits_f_zero_l]
+   addps m0,[ones_f]
+   rcpps m0,m0
+   mulps m0,m1
+   ;//    dotProd4_m4_SSE2(temp,weights+4*49,temp+4,4);
+   pshufd m1,m0,0
+   pshufd m2,m0,85
+   pshufd m3,m0,170
+   pshufd m4,m0,255
+   mulps m1,[r1+784]
+   mulps m2,[r1+784+16]
+   mulps m3,[r1+784+32]
+   mulps m4,[r1+784+48]
+   addps m1,m2
+   addps m3,m4
+   addps m1,m3
+   addps m1,[r1+784+64]
+   ;// elliott4_SSE(temp+4);
+   movaps m7,m1
+   andps m1,[sign_bits_f]
+   movaps m3,m0
+   addps m1,[ones_f]
+   rcpps m1,m1
+   mulps m7,m1
+   ;//    dotProd8_m4_SSE2(temp,weights+4*49+4*5,temp+32,4);
+   pshufd m0,m0,0
+   pshufd m1,m3,85
+   pshufd m2,m3,170
+   pshufd m3,m3,255
+   mulps m0,[r1+864]
+   mulps m1,[r1+864+16]
+   mulps m2,[r1+864+32]
+   mulps m3,[r1+864+48]
+   pshufd m4,m7,0
+   pshufd m5,m7,85
+   pshufd m6,m7,170
+   pshufd m7,m7,255
+   mulps m4,[r1+864+64]
+   mulps m5,[r1+864+80]
+   mulps m6,[r1+864+96]
+   mulps m7,[r1+864+112]
+   addps m0,m1
+   addps m2,m3
+   addps m4,m5
+   addps m6,m7
+   addps m0,m2
+   addps m4,m6
+   addps m0,m4
+   ;mov ecx/r2,[esp+12]
+   addps m0,[r1+864+128]
+   movhlps m1,m0
+   maxps m0,m1
+   pshuflw m1,m0,14
+   comiss m1,m0
+   jbe .finish
+   xor r3,r3
+.finish:
+   mov [r2],r3b
    RET

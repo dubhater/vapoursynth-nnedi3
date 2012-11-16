@@ -23,6 +23,7 @@ extern void nnedi3_extract_m8_i16_SSE2(const uint8_t *srcp, const int stride, co
 extern void nnedi3_dotProd_m32_m16_i16_SSE2(const float *dataf, const float *weightsf, float *vals, const int n, const int len, const float *istd);
 extern void nnedi3_e0_m16_SSE2(float *s, const int n);
 extern void nnedi3_castScale_SSE(const float *val, const float *scale, uint8_t *dstp);
+extern void nnedi3_computeNetwork0_SSE2(const float *input, const float *weights, uint8_t *d);
 
 
 typedef struct {
@@ -449,8 +450,6 @@ __declspec(naked) void dotProd_m48_m16_SSE2(const float *data, const float *weig
 }
 
 
-void computeNetwork0_SSE2(const float *input, const float *weights, uint8_t *d) {
-}
 
 
 void computeNetwork0_C(const float *input, const float *weights, uint8_t *d)
@@ -647,7 +646,7 @@ void evalFunc_0(void **instanceData, FrameData *frameData)
          if (opt == 1)
             computeNetwork0 = computeNetwork0_C;
          else
-            computeNetwork0 = computeNetwork0_SSE2;
+            computeNetwork0 = nnedi3_computeNetwork0_SSE2;
       }
    }
    else // new prescreener
