@@ -919,3 +919,70 @@ cglobal computeNetwork0_SSE2, 3, 4, 8
 .finish:
    mov [r2],r3b
    RET
+
+
+; parameters:
+;  const uint8_t *t,
+;  const int pitch,
+;  float *p
+INIT_XMM
+cglobal uc2f48_SSE2, 3, 3, 7
+   pxor m6,m6
+   movq m0,[r0]
+   movd m4,[r0+8]
+   movq m2,[r0+r1*2]
+   movd m5,[r0+r1*2+8]
+   punpcklbw m0,m6
+   punpcklbw m4,m6
+   punpcklbw m2,m6
+   punpcklbw m5,m6
+   movdqa m1,m0
+   punpcklbw m4,m6
+   movdqa m3,m2
+   punpcklbw m5,m6
+   punpcklbw m0,m6
+   punpckhbw m1,m6
+   punpcklbw m2,m6
+   punpckhbw m3,m6
+   lea r0,[r0+r1*4]
+   cvtdq2ps m4,m4
+   cvtdq2ps m5,m5
+   cvtdq2ps m0,m0
+   cvtdq2ps m1,m1
+   cvtdq2ps m2,m2
+   cvtdq2ps m3,m3
+   movaps [r2],m0
+   movaps [r2+16],m1
+   movaps [r2+32],m4
+   movaps [r2+48],m2
+   movaps [r2+64],m3
+   movaps [r2+80],m5
+   movq m0,[r0]
+   movd m4,[r0+8]
+   movq m2,[r0+r1*2]
+   movd m5,[r0+r1*2+8]
+   punpcklbw m0,m6
+   punpcklbw m4,m6
+   punpcklbw m2,m6
+   punpcklbw m5,m6
+   movdqa m1,m0
+   punpcklbw m4,m6
+   movdqa m3,m2
+   punpcklbw m5,m6
+   punpcklbw m0,m6
+   punpckhbw m1,m6
+   punpcklbw m2,m6
+   punpckhbw m3,m6
+   cvtdq2ps m4,m4
+   cvtdq2ps m5,m5
+   cvtdq2ps m0,m0
+   cvtdq2ps m1,m1
+   cvtdq2ps m2,m2
+   cvtdq2ps m3,m3
+   movaps [r2+96],m0
+   movaps [r2+112],m1
+   movaps [r2+128],m4
+   movaps [r2+144],m2
+   movaps [r2+160],m3
+   movaps [r2+176],m5
+   RET
