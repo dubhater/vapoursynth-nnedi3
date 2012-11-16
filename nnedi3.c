@@ -26,6 +26,7 @@ extern void nnedi3_castScale_SSE(const float *val, const float *scale, uint8_t *
 extern void nnedi3_computeNetwork0_SSE2(const float *input, const float *weights, uint8_t *d);
 extern void nnedi3_uc2f48_SSE2(const uint8_t *t, const int pitch, float *p);
 extern void nnedi3_computeNetwork0_i16_SSE2(const float *inputf, const float *weightsf, uint8_t *d);
+extern void nnedi3_e1_m16_SSE2(float *s, const int n);
 
 
 typedef struct {
@@ -831,8 +832,6 @@ __declspec(align(16)) const float e1_c1[4] = { 0.701277797f, 0.701277797f, 0.701
 __declspec(align(16)) const float e1_c2[4] = { 0.237348593f, 0.237348593f, 0.237348593f, 0.237348593f };
 
 
-void e1_m16_SSE2(float *s, const int n) {
-}
 
 
 void e1_m16_C(float *s, const int n)
@@ -945,7 +944,7 @@ void evalFunc_1(void **instanceData, FrameData *frameData)
       if (opt == 1)
          expf = e1_m16_C;
       else
-         expf = e1_m16_SSE2;
+         expf = nnedi3_e1_m16_SSE2;
    }
    else // use fastest exp
    {

@@ -25,6 +25,12 @@ e0_bias  times 4 dd 1064866805.0 ; (2^23)*127.0-486411.0
 
 sse_half times 4 dd 0.5
 
+e1_scale times 4 dd 1.4426950409 ; 1/ln(2)
+e1_bias  times 4 dd 12582912.0 ; 3 << 22
+e1_c0    times 4 dd 1.00035
+e1_c1    times 4 dd 0.701277797
+e1_c2    times 4 dd 0.237348593
+
 
 SECTION .text
 
@@ -1142,3 +1148,50 @@ cglobal computeNetwork0_i16_SSE2, 3, 4, 8
    mov [r2],r3b
    RET
 
+
+; parameters:
+;  float *s,
+;  const int n
+INIT_XMM
+cglobal e1_m16_SSE2, 2, 2, 6
+.eloop8:
+   movaps m0,[r0]
+   movaps m3,[r0+16]
+   minps m0,[exp_hi]
+   minps m3,[exp_hi]
+   maxps m0,[exp_lo]
+   maxps m3,[exp_lo]
+   mulps m0,[e1_scale]
+   mulps m3,[e1_scale]
+   movaps m1,m0
+   movaps m4,m3
+   addps m0,[e1_bias]
+   addps m3,[e1_bias]
+   movaps m2,m0
+   movaps m5,m3
+   subps m0,[e1_bias]
+   subps m3,[e1_bias]
+   pslld m2,23
+   pslld m5,23
+   subps m1,m0
+   subps m4,m3
+   movaps m0,m1
+   movaps m3,m4
+   mulps m1,m1
+   mulps m4,m4
+   mulps m0,[e1_c1]
+   mulps m3,[e1_c1]
+   mulps m1,[e1_c2]
+   mulps m4,[e1_c2]
+   addps m0,[e1_c0]
+   addps m3,[e1_c0]
+   addps m0,m1
+   addps m3,m4
+   paddd m0,m2
+   paddd m3,m5
+   movaps [r0],m0
+   movaps [r0+16],m3
+   add r0,32
+   sub r1,8
+   jnz .eloop8
+   RET
