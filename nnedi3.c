@@ -441,16 +441,6 @@ void dotProdS_C(const float *dataf, const float *weightsf,
 }
 
 
-
-
-
-
-
-
-
-
-
-
 void computeNetwork0_C(const float *input, const float *weights, uint8_t *d)
 {
    float temp[12], scale = 1.0f;
@@ -466,8 +456,6 @@ void computeNetwork0_C(const float *input, const float *weights, uint8_t *d)
    else
       d[0] = 0;
 }
-
-
 
 
 void computeNetwork0_i16_C(const float *inputf, const float *weightsf, uint8_t *d)
@@ -488,16 +476,12 @@ void computeNetwork0_i16_C(const float *inputf, const float *weightsf, uint8_t *
 }
 
 
-
-
 void uc2f48_C(const uint8_t *t, const int pitch, float *p)
 {
    for (int y=0; y<4; ++y)
       for (int x=0; x<12; ++x)
          p[y*12+x] = t[y*pitch*2+x];
 }
-
-
 
 
 void uc2s48_C(const uint8_t *t, const int pitch, float *pf)
@@ -551,9 +535,6 @@ int32_t processLine0_C(const uint8_t *tempu, int width, uint8_t *dstp,
 #undef CB2
 
 // new prescreener functions
-
-
-
 void uc2s64_C(const uint8_t *t, const int pitch, float *p)
 {
    int16_t *ps = (int16_t*)p;
@@ -561,8 +542,6 @@ void uc2s64_C(const uint8_t *t, const int pitch, float *p)
       for (int x=0; x<16; ++x)
          ps[y*16+x] = t[y*pitch*2+x];
 }
-
-
 
 
 void computeNetwork0new_C(const float *datai, const float *weights, uint8_t *d)
@@ -726,8 +705,6 @@ void evalFunc_0(void **instanceData, FrameData *frameData)
 }
 
 
-
-
 void extract_m8_C(const uint8_t *srcp, const int stride, 
    const int xdia, const int ydia, float *mstd, float *input)
 {
@@ -754,8 +731,6 @@ void extract_m8_C(const uint8_t *srcp, const int stride,
       mstd[2] = 1.0f/mstd[1];
    }
 }
-
-
 
 
 void extract_m8_i16_C(const uint8_t *srcp, const int stride, 
@@ -787,20 +762,18 @@ void extract_m8_i16_C(const uint8_t *srcp, const int stride,
 }
 
 
-__declspec(align(16)) const float exp_lo[4] = { -80.0f, -80.0f, -80.0f, -80.0f };
-__declspec(align(16)) const float exp_hi[4] = { +80.0f, +80.0f, +80.0f, +80.0f };
+const float exp_lo[4] = { -80.0f, -80.0f, -80.0f, -80.0f };
+const float exp_hi[4] = { +80.0f, +80.0f, +80.0f, +80.0f };
 
 
 // exp from:  A Fast, Compact Approximation of the Exponential Function (1998)
 //            Nicol N. Schraudolph
 
 
-__declspec(align(16)) const float e0_mult[4] = { // (1.0/ln(2))*(2^23)
+const float e0_mult[4] = { // (1.0/ln(2))*(2^23)
    12102203.161561486f, 12102203.161561486f, 12102203.161561486f, 12102203.161561486f };
-__declspec(align(16)) const float e0_bias[4] = { // (2^23)*127.0-486411.0
+const float e0_bias[4] = { // (2^23)*127.0-486411.0
    1064866805.0f, 1064866805.0f, 1064866805.0f, 1064866805.0f };
-
-
 
 
 void e0_m16_C(float *s, const int n)
@@ -816,15 +789,13 @@ void e0_m16_C(float *s, const int n)
 // exp from Loren Merritt
 
 
-__declspec(align(16)) const float e1_scale[4] = { // 1/ln(2)
+const float e1_scale[4] = { // 1/ln(2)
    1.4426950409f, 1.4426950409f, 1.4426950409f, 1.4426950409f };
-__declspec(align(16)) const float e1_bias[4] = { // 3<<22
+const float e1_bias[4] = { // 3<<22
    12582912.0f, 12582912.0f, 12582912.0f, 12582912.0f };
-__declspec(align(16)) const float e1_c0[4] = { 1.00035f, 1.00035f, 1.00035f, 1.00035f };
-__declspec(align(16)) const float e1_c1[4] = { 0.701277797f, 0.701277797f, 0.701277797f, 0.701277797f };
-__declspec(align(16)) const float e1_c2[4] = { 0.237348593f, 0.237348593f, 0.237348593f, 0.237348593f };
-
-
+const float e1_c0[4] = { 1.00035f, 1.00035f, 1.00035f, 1.00035f };
+const float e1_c1[4] = { 0.701277797f, 0.701277797f, 0.701277797f, 0.701277797f };
+const float e1_c2[4] = { 0.237348593f, 0.237348593f, 0.237348593f, 0.237348593f };
 
 
 void e1_m16_C(float *s, const int n)
@@ -841,8 +812,6 @@ void e1_m16_C(float *s, const int n)
 }
 
 
-
-
 void e2_m16_C(float *s, const int n)
 {
    for (int i=0; i<n; ++i)
@@ -852,9 +821,7 @@ void e2_m16_C(float *s, const int n)
 // exp from Intel Approximate Math (AM) Library
 
 
-__declspec(align(16)) const float min_weight_sum[4] = { 1e-10f, 1e-10f, 1e-10f, 1e-10f };
-
-
+const float min_weight_sum[4] = { 1e-10f, 1e-10f, 1e-10f, 1e-10f };
 
 
 void weightedAvgElliottMul5_m16_C(const float *w, const int n, float *mstd)
@@ -870,8 +837,6 @@ void weightedAvgElliottMul5_m16_C(const float *w, const int n, float *mstd)
    else
       mstd[3] += mstd[0];
 }
-
-
 
 
 void evalFunc_1(void **instanceData, FrameData *frameData)
