@@ -1104,10 +1104,9 @@ static void VS_CC nnedi3Create(const VSMap *in, VSMap *out, void *userData, VSCo
       d.pscrn = 2;
    }
 
-   // FIXME: change the default to 2 when the asm functions are ready.
    d.opt = vsapi->propGetInt(in, "opt", 0, &err);
    if (err) {
-      d.opt = 1;
+      d.opt = 2;
    }
    
    d.fapprox = vsapi->propGetInt(in, "fapprox", 0, &err);
