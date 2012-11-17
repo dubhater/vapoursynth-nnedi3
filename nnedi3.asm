@@ -1263,3 +1263,96 @@ cglobal e2_m16_SSE2, 2, 2, 7
    sub r1,4
    jnz .eloop4
    RET
+
+
+; parameters:
+;  const uint8_t *srcp,
+;  const int stride,
+;  const int xdia,
+;  const int ydia,
+;  float *mstd,
+;  float *input
+INIT_XMM
+cglobal extract_m8_SSE2, 6, 7, 8
+   lea r6,[r0+r1*2]
+   pxor m5,m5 ;// sum
+   pxor m6,m6 ;// sumsq
+   pxor m3,m3
+   PUSH r3
+   PUSH r4
+.yloop2:
+   xor r4,r4
+.xloop2:
+   movq m0,[r0+r4]
+   movq m2,[r6+r4]
+   punpcklbw m0,m3
+   punpcklbw m2,m3
+   movdqa m1,m0
+   movdqa m4,m2
+   punpcklwd m0,m3
+   punpckhwd m1,m3
+   punpcklwd m2,m3
+   punpckhwd m4,m3
+   cvtdq2ps m0,m0
+   cvtdq2ps m1,m1
+   cvtdq2ps m2,m2
+   cvtdq2ps m4,m4
+   movaps [r5],m0
+   movaps [r5+16],m1
+   movaps [r5+r2*4],m2
+   movaps [r5+r2*4+16],m4
+   addps m5,m0
+   addps m5,m1
+   addps m5,m2
+   addps m5,m4
+   mulps m0,m0
+   mulps m1,m1
+   mulps m2,m2
+   mulps m4,m4
+   addps m0,m1
+   addps m2,m4
+   addps m6,m0
+   addps m6,m2
+   add r4,8
+   add r5,32
+   cmp r4,r2
+   jl .xloop2
+   lea r0,[r0+r1*4]
+   lea r6,[r6+r1*4]
+   lea r5,[r5+r2*4]
+   sub r3,2
+   jnz .yloop2
+   POP r4
+   POP r3
+
+   movhlps m0,m5
+   movhlps m1,m6
+   movd m2,r2d
+   movd m4,r3d
+   pmuludq m2,m4
+   addps m5,m0
+   addps m6,m1
+   cvtdq2ps m7,m2
+   pshuflw m0,m5,14
+   pshuflw m1,m6,14
+   rcpss m7,m7 ;// scale
+   addss m5,m0
+   addss m6,m1
+   mulss m5,m7 ;// mean
+   mulss m6,m7
+   movss [r4],m5
+   mulss m5,m5
+   subss m6,m5 ;// var
+   comiss m6,[flt_epsilon_sse]
+   jbe .novarjmp
+   rsqrtss m6,m6 ;// 1.0/std
+   rcpss m5,m6 ;// std
+   movss [r4+4],m5
+   movss [r4+8],m6
+   jmp .finish
+.novarjmp:
+   movss [r4+4],m3
+   movss [r4+8],m3
+.finish:
+   movss [r4+12],m3
+   RET
