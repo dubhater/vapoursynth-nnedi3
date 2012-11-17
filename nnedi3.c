@@ -34,6 +34,18 @@ extern void nnedi3_dotProd_m48_m16_i16_SSE2(const float *dataf, const float *wei
 extern void nnedi3_dotProd_m48_m16_SSE2(const float *data, const float *weights, float *vals, const int n, const int len, const float *istd);
 
 
+// Functions used in evalFunc_0
+void (*uc2s)(const uint8_t*, const int, float*);
+void (*computeNetwork0)(const float*, const float*, uint8_t *d);
+int32_t (*processLine0)(const uint8_t*, int, uint8_t*, const uint8_t*, const int);
+
+// Functions used in evalFunc_1
+void (*extract)(const uint8_t*, const int, const int, const int, float*, float*);
+void (*dotProd)(const float*, const float*, float*, const int, const int, const float*);
+void (*expfunc)(float *, const int);
+void (*wae5)(const float*, const int, float*);
+
+
 typedef struct {
    VSNodeRef *node;
    VSVideoInfo vi;
@@ -76,271 +88,6 @@ typedef struct {
    float *temp;
 } FrameData;
 
-
-#define NUM_NSIZE 7
-#define NUM_NNS 5
-
-
-int roundds(const double f)
-{
-   if (f-floor(f) >= 0.5)
-      return min((int)ceil(f),32767);
-   return max((int)floor(f),-32768);
-}
-
-
-void shufflePreScrnL2L3(float *wf, float *rf, const int opt)
-{
-   for (int j=0; j<4; ++j)
-      for (int k=0; k<4; ++k)
-         wf[k*4+j] = rf[j*4+k];
-   rf += 4*5;
-   wf += 4*5;
-   const int jtable[4] = { 0, 2, 1, 3 };
-   for (int j=0; j<4; ++j)
-   {
-      for (int k=0; k<8; ++k)
-         wf[k*4+j] = rf[jtable[j]*8+k];
-      wf[4*8+j] = rf[4*8+jtable[j]];
-   }
-}
-
-
-
-int modnpf(const int m, const int n)
-{
-   if ((m%n) == 0)
-      return m;
-   return m+n-(m%n);
-}
-
-
-extern uint8_t _binary_binary1_0_9_4_bin_start;
-//extern uint8_t _binary_binary1_0_9_4_bin_end;
-//extern uint8_t _binary_binary1_0_9_4_bin_size;
-
-
-static void VS_CC nnedi3Init(VSMap *in, VSMap *out, void **instanceData, VSNode *node, VSCore *core, const VSAPI *vsapi) {
-   nnedi3Data *d = (nnedi3Data *) * instanceData;
-   vsapi->setVideoInfo(&d->vi, 1, node);
-
-   const float* bdata = (const float*)&_binary_binary1_0_9_4_bin_start;
-
-   const int xdiaTable[NUM_NSIZE] = { 8, 16, 32, 48, 8, 16, 32 };
-   const int ydiaTable[NUM_NSIZE] = { 6, 6, 6, 6, 4, 4, 4 };
-   const int nnsTable[NUM_NNS] = { 16, 32, 64, 128, 256 };
-
-   const int dims0 = 49*4+5*4+9*4;
-   const int dims0new = 4*65+4*5;
-   const int dims1 = nnsTable[d->nnsparam]*2*(xdiaTable[d->nsize]*ydiaTable[d->nsize]+1);
-   int dims1tsize = 0;
-   int dims1offset;
-
-   for (int j=0; j<NUM_NNS; ++j)
-   {
-      for (int i=0; i<NUM_NSIZE; ++i)
-      {
-         if (i == d->nsize && j == d->nnsparam) {
-            dims1offset = dims1tsize;
-         }
-         dims1tsize += nnsTable[j]*2*(xdiaTable[i]*ydiaTable[i]+1)*2;
-      }
-   }
-
-   VS_ALIGNED_MALLOC(&d->weights0, max(dims0, dims0new) * sizeof(float), 16);
-
-   for (int i = 0; i < 2; ++i)
-   {
-      VS_ALIGNED_MALLOC(&d->weights1[i], dims1 * sizeof(float), 16);
-   }
-
-
-   // Adjust prescreener weights
-   if (d->pscrn >= 2) // using new prescreener
-   {
-      int *offt = (int*)calloc(4*64,sizeof(int));
-      for (int j=0; j<4; ++j)
-         for (int k=0; k<64; ++k)
-            offt[j*64+k] = ((k>>3)<<5)+((j&3)<<3)+(k&7);
-      const float *bdw = bdata+dims0+dims0new*(d->pscrn-2);
-      int16_t *ws = (int16_t*)d->weights0;
-      float *wf = (float*)&ws[4*64];
-      double mean[4] = { 0.0, 0.0, 0.0, 0.0 };
-      // Calculate mean weight of each first layer neuron
-      for (int j=0; j<4; ++j)
-      {
-         double cmean = 0.0;
-         for (int k=0; k<64; ++k)
-            cmean += bdw[offt[j*64+k]];
-         mean[j] = cmean/64.0;
-      }
-      // Factor mean removal and 1.0/127.5 scaling 
-      // into first layer weights. scale to int16 range
-      for (int j=0; j<4; ++j)
-      {
-         double mval = 0.0;
-         for (int k=0; k<64; ++k)
-            mval = max(mval,fabs((bdw[offt[j*64+k]]-mean[j])/127.5));
-         const double scale = 32767.0/mval;
-         for (int k=0; k<64; ++k)
-            ws[offt[j*64+k]] = roundds(((bdw[offt[j*64+k]]-mean[j])/127.5)*scale);
-         wf[j] = (float)(mval/32767.0);
-      }
-      memcpy(wf+4,bdw+4*64,(dims0new-4*64)*sizeof(float));
-      free(offt);
-   }
-   else // using old prescreener
-   {
-      double mean[4] = { 0.0, 0.0, 0.0, 0.0 };
-      // Calculate mean weight of each first layer neuron
-      for (int j=0; j<4; ++j)
-      {
-         double cmean = 0.0;
-         for (int k=0; k<48; ++k)
-            cmean += bdata[j*48+k];
-         mean[j] = cmean/48.0;
-      }
-      if (d->fapprox & 1) // use int16 dot products in first layer
-      {
-         int16_t *ws = (int16_t*)d->weights0;
-         float *wf = (float*)&ws[4*48];
-         // Factor mean removal and 1.0/127.5 scaling 
-         // into first layer weights. scale to int16 range
-         for (int j=0; j<4; ++j)
-         {
-            double mval = 0.0;
-            for (int k=0; k<48; ++k)
-               mval = max(mval,fabs((bdata[j*48+k]-mean[j])/127.5));
-            const double scale = 32767.0/mval;
-            for (int k=0; k<48; ++k)
-               ws[j*48+k] = roundds(((bdata[j*48+k]-mean[j])/127.5)*scale);
-            wf[j] = (float)(mval/32767.0);
-         }
-         memcpy(wf+4,bdata+4*48,(dims0-4*48)*sizeof(float));
-         if (d->opt > 1) // shuffle weight order for asm
-         {
-            int16_t *rs = (int16_t*)malloc(dims0*sizeof(float));
-            memcpy(rs,d->weights0,dims0*sizeof(float));
-            for (int j=0; j<4; ++j)
-               for (int k=0; k<48; ++k)
-                  ws[(k>>3)*32+j*8+(k&7)] = rs[j*48+k];
-            shufflePreScrnL2L3(wf+8,((float*)&rs[4*48])+8,d->opt);
-            free(rs);
-         }
-      }
-      else // use float dot products in first layer
-      {
-         // Factor mean removal and 1.0/127.5 scaling 
-         // into first layer weights.
-         for (int j=0; j<4; ++j)
-            for (int k=0; k<48; ++k)
-               d->weights0[j*48+k] = (bdata[j*48+k]-mean[j])/127.5;
-         memcpy(d->weights0+4*48,bdata+4*48,(dims0-4*48)*sizeof(float));
-         if (d->opt > 1) // shuffle weight order for asm
-         {
-            float *wf = d->weights0;
-            float *rf = (float*)malloc(dims0*sizeof(float));
-            memcpy(rf,d->weights0,dims0*sizeof(float));
-            for (int j=0; j<4; ++j)
-               for (int k=0; k<48; ++k)
-                  wf[(k>>2)*16+j*4+(k&3)] = rf[j*48+k];
-            shufflePreScrnL2L3(wf+4*49,rf+4*49,d->opt);
-            free(rf);
-         }
-      }
-   }
-
-   // Adjust prediction weights
-   for (int i=0; i<2; ++i)
-   {
-      const float *bdataT = bdata+dims0+dims0new*3+dims1tsize*d->etype+dims1offset+i*dims1;
-      const int nnst = nnsTable[d->nnsparam];
-      const int asize = xdiaTable[d->nsize]*ydiaTable[d->nsize];
-      const int boff = nnst*2*asize;
-      double *mean = (double*)calloc(asize+1+nnst*2,sizeof(double));
-      // Calculate mean weight of each neuron (ignore bias)
-      for (int j=0; j<nnst*2; ++j)
-      {
-         double cmean = 0.0;
-         for (int k=0; k<asize; ++k)
-            cmean += bdataT[j*asize+k];
-         mean[asize+1+j] = cmean/(double)asize;
-      }
-      // Calculate mean softmax neuron
-      for (int j=0; j<nnst; ++j)
-      {
-         for (int k=0; k<asize; ++k)
-            mean[k] += bdataT[j*asize+k]-mean[asize+1+j];
-         mean[asize] += bdataT[boff+j];
-      }
-      for (int j=0; j<asize+1; ++j)
-         mean[j] /= (double)(nnst);
-      if (d->fapprox&2) // use int16 dot products
-      {
-         int16_t *ws = (int16_t*)d->weights1[i];
-         float *wf = (float*)&ws[nnst*2*asize];
-         // Factor mean removal into weights, remove global offset from
-         // softmax neurons, and scale weights to int16 range.
-         for (int j=0; j<nnst; ++j) // softmax neurons
-         {
-            double mval = 0.0;
-            for (int k=0; k<asize; ++k)
-               mval = max(mval,fabs(bdataT[j*asize+k]-mean[asize+1+j]-mean[k]));
-            const double scale = 32767.0/mval;
-            for (int k=0; k<asize; ++k)
-               ws[j*asize+k] = roundds((bdataT[j*asize+k]-mean[asize+1+j]-mean[k])*scale);
-            wf[(j>>2)*8+(j&3)] = (float)(mval/32767.0);
-            wf[(j>>2)*8+(j&3)+4] = bdataT[boff+j]-mean[asize];
-         }
-         for (int j=nnst; j<nnst*2; ++j) // elliott neurons
-         {
-            double mval = 0.0;
-            for (int k=0; k<asize; ++k)
-               mval = max(mval,fabs(bdataT[j*asize+k]-mean[asize+1+j]));
-            const double scale = 32767.0/mval;
-            for (int k=0; k<asize; ++k)
-               ws[j*asize+k] = roundds((bdataT[j*asize+k]-mean[asize+1+j])*scale);
-            wf[(j>>2)*8+(j&3)] = (float)(mval/32767.0);
-            wf[(j>>2)*8+(j&3)+4] = bdataT[boff+j];
-         }
-         if (d->opt > 1) // shuffle weight order for asm
-         {
-            int16_t *rs = (int16_t*)malloc(nnst*2*asize*sizeof(int16_t));
-            memcpy(rs,ws,nnst*2*asize*sizeof(int16_t));
-            for (int j=0; j<nnst*2; ++j)
-               for (int k=0; k<asize; ++k)
-                  ws[(j>>2)*asize*4+(k>>3)*32+(j&3)*8+(k&7)] = rs[j*asize+k];
-            free(rs);
-         }
-      }
-      else // use float dot products
-      {
-         // Factor mean removal into weights, and remove global
-         // offset from softmax neurons.
-         for (int j=0; j<nnst*2; ++j)
-         {
-            for (int k=0; k<asize; ++k)
-            {
-               const double q = j < nnst ? mean[k] : 0.0;
-               if (d->opt > 1) // shuffle weight order for asm
-                  d->weights1[i][(j>>2)*asize*4+(k>>2)*16+(j&3)*4+(k&3)] = 
-                     bdataT[j*asize+k]-mean[asize+1+j]-q;
-               else
-                  d->weights1[i][j*asize+k] = bdataT[j*asize+k]-mean[asize+1+j]-q;
-            }
-            d->weights1[i][boff+j] = bdataT[boff+j]-(j<nnst?mean[asize]:0.0);
-         }
-      }
-      free(mean);
-   }
-
-   //free(bdata);
-
-   d->nns = nnsTable[d->nnsparam];
-   d->xdia = xdiaTable[d->nsize];
-   d->ydia = ydiaTable[d->nsize];
-   d->asize = xdiaTable[d->nsize] * ydiaTable[d->nsize];
-}
 
 
 static void VS_CC copyPad(const VSFrameRef *src, FrameData *frameData, void **instanceData, int fn, const VSAPI *vsapi) {
@@ -583,59 +330,6 @@ void evalFunc_0(void **instanceData, FrameData *frameData)
    const float *weights0 = d->weights0;
    float *temp = frameData->temp;
    uint8_t *tempu = (uint8_t*)temp;
-   const int opt = d->opt;
-   const int pscrn = d->pscrn;
-   const int fapprox = d->fapprox;
-
-   void (*uc2s)(const uint8_t*, const int, float*);
-   void (*computeNetwork0)(const float*, const float*, uint8_t *d);
-   int32_t (*processLine0)(const uint8_t*, int, uint8_t*, const uint8_t*, const int);
-
-   if (opt == 1)
-      processLine0 = processLine0_C;
-   else
-      processLine0 = processLine0_maybeSSE2;
-
-   if (pscrn < 2) // original prescreener
-   {
-      if (fapprox & 1) // int16 dot products
-      {
-         if (opt == 1)
-            uc2s = uc2s48_C;
-         else
-            uc2s = nnedi3_uc2s48_SSE2;
-
-         if (opt == 1)
-            computeNetwork0 = computeNetwork0_i16_C;
-         else
-            computeNetwork0 = nnedi3_computeNetwork0_i16_SSE2;
-      }
-      else
-      {
-         if (opt == 1)
-            uc2s = uc2f48_C;
-         else
-            uc2s = nnedi3_uc2f48_SSE2;
-
-         if (opt == 1)
-            computeNetwork0 = computeNetwork0_C;
-         else
-            computeNetwork0 = nnedi3_computeNetwork0_SSE2;
-      }
-   }
-   else // new prescreener
-   {
-      // only int16 dot products
-      if (opt == 1)
-         uc2s = uc2s64_C;
-      else
-         uc2s = nnedi3_uc2s64_SSE2;
-
-      if (opt == 1)
-         computeNetwork0 = computeNetwork0new_C;
-      else
-         computeNetwork0 = nnedi3_computeNetwork0new_SSE2;
-   }
 
    // And now the actual work.
    for (int b = 0; b < d->vi.format->numPlanes; ++b)
@@ -853,62 +547,7 @@ void evalFunc_1(void **instanceData, FrameData *frameData)
    const int xdia = d->xdia;
    const int xdiad2m1 = (xdia>>1)-1;
    const int ydia = d->ydia;
-   const int fapprox = d->fapprox;
    const float scale = 1.0f/(float)qual;
-
-   void (*extract)(const uint8_t*, const int, const int, const int, float*, float*);
-   void (*dotProd)(const float*, const float*, float*, const int, const int, const float*);
-   void (*expf)(float *, const int);
-   void (*wae5)(const float*, const int, float*);
-
-   if (opt == 1)
-      wae5 = weightedAvgElliottMul5_m16_C;
-   else
-      wae5 = nnedi3_weightedAvgElliottMul5_m16_SSE2;
-
-   if (fapprox & 2) // use int16 dot products
-   {
-      if (opt == 1)
-         extract = extract_m8_i16_C;
-      else
-         extract = nnedi3_extract_m8_i16_SSE2;
-      if (opt == 1)
-         dotProd = dotProdS_C;
-      else
-         dotProd = (asize%48) ? nnedi3_dotProd_m32_m16_i16_SSE2 : nnedi3_dotProd_m48_m16_i16_SSE2;
-   }
-   else // use float dot products
-   {
-      if (opt == 1)
-         extract = extract_m8_C;
-      else
-         extract = nnedi3_extract_m8_SSE2;
-      if (opt == 1)
-         dotProd = dotProd_C;
-      else
-         dotProd = (asize%48) ? nnedi3_dotProd_m32_m16_SSE2 : nnedi3_dotProd_m48_m16_SSE2;
-   }
-   if ((fapprox & 12) == 0) // use slow exp
-   {
-      if (opt == 1)
-         expf = e2_m16_C;
-      else
-         expf = nnedi3_e2_m16_SSE2;
-   }
-   else if ((fapprox & 12) == 4) // use faster exp
-   {
-      if (opt == 1)
-         expf = e1_m16_C;
-      else
-         expf = nnedi3_e1_m16_SSE2;
-   }
-   else // use fastest exp
-   {
-      if (opt == 1)
-         expf = e0_m16_C;
-      else
-         expf = nnedi3_e0_m16_SSE2;
-   }
 
    for (int b = 0; b < d->vi.format->numPlanes; ++b)
    {
@@ -940,7 +579,7 @@ void evalFunc_1(void **instanceData, FrameData *frameData)
             for (int i=0; i<qual; ++i)
             {
                dotProd(input,weights1[i],temp,nns*2,asize,mstd+2);
-               expf(temp,nns);
+               expfunc(temp,nns);
                wae5(temp,nns,mstd);
             }
             if (opt > 1)
@@ -952,6 +591,349 @@ void evalFunc_1(void **instanceData, FrameData *frameData)
          dstp += dst_stride*2;
       }
    }
+}
+
+
+#define NUM_NSIZE 7
+#define NUM_NNS 5
+
+
+int roundds(const double f)
+{
+   if (f-floor(f) >= 0.5)
+      return min((int)ceil(f),32767);
+   return max((int)floor(f),-32768);
+}
+
+
+void shufflePreScrnL2L3(float *wf, float *rf, const int opt)
+{
+   for (int j=0; j<4; ++j)
+      for (int k=0; k<4; ++k)
+         wf[k*4+j] = rf[j*4+k];
+   rf += 4*5;
+   wf += 4*5;
+   const int jtable[4] = { 0, 2, 1, 3 };
+   for (int j=0; j<4; ++j)
+   {
+      for (int k=0; k<8; ++k)
+         wf[k*4+j] = rf[jtable[j]*8+k];
+      wf[4*8+j] = rf[4*8+jtable[j]];
+   }
+}
+
+
+
+extern uint8_t _binary_binary1_0_9_4_bin_start;
+//extern uint8_t _binary_binary1_0_9_4_bin_end;
+//extern uint8_t _binary_binary1_0_9_4_bin_size;
+
+
+static void VS_CC nnedi3Init(VSMap *in, VSMap *out, void **instanceData, VSNode *node, VSCore *core, const VSAPI *vsapi) {
+   nnedi3Data *d = (nnedi3Data *) * instanceData;
+   vsapi->setVideoInfo(&d->vi, 1, node);
+
+   const float* bdata = (const float*)&_binary_binary1_0_9_4_bin_start;
+
+   const int xdiaTable[NUM_NSIZE] = { 8, 16, 32, 48, 8, 16, 32 };
+   const int ydiaTable[NUM_NSIZE] = { 6, 6, 6, 6, 4, 4, 4 };
+   const int nnsTable[NUM_NNS] = { 16, 32, 64, 128, 256 };
+
+   const int dims0 = 49*4+5*4+9*4;
+   const int dims0new = 4*65+4*5;
+   const int dims1 = nnsTable[d->nnsparam]*2*(xdiaTable[d->nsize]*ydiaTable[d->nsize]+1);
+   int dims1tsize = 0;
+   int dims1offset;
+
+   for (int j=0; j<NUM_NNS; ++j)
+   {
+      for (int i=0; i<NUM_NSIZE; ++i)
+      {
+         if (i == d->nsize && j == d->nnsparam) {
+            dims1offset = dims1tsize;
+         }
+         dims1tsize += nnsTable[j]*2*(xdiaTable[i]*ydiaTable[i]+1)*2;
+      }
+   }
+
+   VS_ALIGNED_MALLOC(&d->weights0, max(dims0, dims0new) * sizeof(float), 16);
+
+   for (int i = 0; i < 2; ++i)
+   {
+      VS_ALIGNED_MALLOC(&d->weights1[i], dims1 * sizeof(float), 16);
+   }
+
+
+   // Adjust prescreener weights
+   if (d->pscrn >= 2) // using new prescreener
+   {
+      int *offt = (int*)calloc(4*64,sizeof(int));
+      for (int j=0; j<4; ++j)
+         for (int k=0; k<64; ++k)
+            offt[j*64+k] = ((k>>3)<<5)+((j&3)<<3)+(k&7);
+      const float *bdw = bdata+dims0+dims0new*(d->pscrn-2);
+      int16_t *ws = (int16_t*)d->weights0;
+      float *wf = (float*)&ws[4*64];
+      double mean[4] = { 0.0, 0.0, 0.0, 0.0 };
+      // Calculate mean weight of each first layer neuron
+      for (int j=0; j<4; ++j)
+      {
+         double cmean = 0.0;
+         for (int k=0; k<64; ++k)
+            cmean += bdw[offt[j*64+k]];
+         mean[j] = cmean/64.0;
+      }
+      // Factor mean removal and 1.0/127.5 scaling 
+      // into first layer weights. scale to int16 range
+      for (int j=0; j<4; ++j)
+      {
+         double mval = 0.0;
+         for (int k=0; k<64; ++k)
+            mval = max(mval,fabs((bdw[offt[j*64+k]]-mean[j])/127.5));
+         const double scale = 32767.0/mval;
+         for (int k=0; k<64; ++k)
+            ws[offt[j*64+k]] = roundds(((bdw[offt[j*64+k]]-mean[j])/127.5)*scale);
+         wf[j] = (float)(mval/32767.0);
+      }
+      memcpy(wf+4,bdw+4*64,(dims0new-4*64)*sizeof(float));
+      free(offt);
+   }
+   else // using old prescreener
+   {
+      double mean[4] = { 0.0, 0.0, 0.0, 0.0 };
+      // Calculate mean weight of each first layer neuron
+      for (int j=0; j<4; ++j)
+      {
+         double cmean = 0.0;
+         for (int k=0; k<48; ++k)
+            cmean += bdata[j*48+k];
+         mean[j] = cmean/48.0;
+      }
+      if (d->fapprox & 1) // use int16 dot products in first layer
+      {
+         int16_t *ws = (int16_t*)d->weights0;
+         float *wf = (float*)&ws[4*48];
+         // Factor mean removal and 1.0/127.5 scaling 
+         // into first layer weights. scale to int16 range
+         for (int j=0; j<4; ++j)
+         {
+            double mval = 0.0;
+            for (int k=0; k<48; ++k)
+               mval = max(mval,fabs((bdata[j*48+k]-mean[j])/127.5));
+            const double scale = 32767.0/mval;
+            for (int k=0; k<48; ++k)
+               ws[j*48+k] = roundds(((bdata[j*48+k]-mean[j])/127.5)*scale);
+            wf[j] = (float)(mval/32767.0);
+         }
+         memcpy(wf+4,bdata+4*48,(dims0-4*48)*sizeof(float));
+         if (d->opt > 1) // shuffle weight order for asm
+         {
+            int16_t *rs = (int16_t*)malloc(dims0*sizeof(float));
+            memcpy(rs,d->weights0,dims0*sizeof(float));
+            for (int j=0; j<4; ++j)
+               for (int k=0; k<48; ++k)
+                  ws[(k>>3)*32+j*8+(k&7)] = rs[j*48+k];
+            shufflePreScrnL2L3(wf+8,((float*)&rs[4*48])+8,d->opt);
+            free(rs);
+         }
+      }
+      else // use float dot products in first layer
+      {
+         // Factor mean removal and 1.0/127.5 scaling 
+         // into first layer weights.
+         for (int j=0; j<4; ++j)
+            for (int k=0; k<48; ++k)
+               d->weights0[j*48+k] = (bdata[j*48+k]-mean[j])/127.5;
+         memcpy(d->weights0+4*48,bdata+4*48,(dims0-4*48)*sizeof(float));
+         if (d->opt > 1) // shuffle weight order for asm
+         {
+            float *wf = d->weights0;
+            float *rf = (float*)malloc(dims0*sizeof(float));
+            memcpy(rf,d->weights0,dims0*sizeof(float));
+            for (int j=0; j<4; ++j)
+               for (int k=0; k<48; ++k)
+                  wf[(k>>2)*16+j*4+(k&3)] = rf[j*48+k];
+            shufflePreScrnL2L3(wf+4*49,rf+4*49,d->opt);
+            free(rf);
+         }
+      }
+   }
+
+   // Adjust prediction weights
+   for (int i=0; i<2; ++i)
+   {
+      const float *bdataT = bdata+dims0+dims0new*3+dims1tsize*d->etype+dims1offset+i*dims1;
+      const int nnst = nnsTable[d->nnsparam];
+      const int asize = xdiaTable[d->nsize]*ydiaTable[d->nsize];
+      const int boff = nnst*2*asize;
+      double *mean = (double*)calloc(asize+1+nnst*2,sizeof(double));
+      // Calculate mean weight of each neuron (ignore bias)
+      for (int j=0; j<nnst*2; ++j)
+      {
+         double cmean = 0.0;
+         for (int k=0; k<asize; ++k)
+            cmean += bdataT[j*asize+k];
+         mean[asize+1+j] = cmean/(double)asize;
+      }
+      // Calculate mean softmax neuron
+      for (int j=0; j<nnst; ++j)
+      {
+         for (int k=0; k<asize; ++k)
+            mean[k] += bdataT[j*asize+k]-mean[asize+1+j];
+         mean[asize] += bdataT[boff+j];
+      }
+      for (int j=0; j<asize+1; ++j)
+         mean[j] /= (double)(nnst);
+      if (d->fapprox&2) // use int16 dot products
+      {
+         int16_t *ws = (int16_t*)d->weights1[i];
+         float *wf = (float*)&ws[nnst*2*asize];
+         // Factor mean removal into weights, remove global offset from
+         // softmax neurons, and scale weights to int16 range.
+         for (int j=0; j<nnst; ++j) // softmax neurons
+         {
+            double mval = 0.0;
+            for (int k=0; k<asize; ++k)
+               mval = max(mval,fabs(bdataT[j*asize+k]-mean[asize+1+j]-mean[k]));
+            const double scale = 32767.0/mval;
+            for (int k=0; k<asize; ++k)
+               ws[j*asize+k] = roundds((bdataT[j*asize+k]-mean[asize+1+j]-mean[k])*scale);
+            wf[(j>>2)*8+(j&3)] = (float)(mval/32767.0);
+            wf[(j>>2)*8+(j&3)+4] = bdataT[boff+j]-mean[asize];
+         }
+         for (int j=nnst; j<nnst*2; ++j) // elliott neurons
+         {
+            double mval = 0.0;
+            for (int k=0; k<asize; ++k)
+               mval = max(mval,fabs(bdataT[j*asize+k]-mean[asize+1+j]));
+            const double scale = 32767.0/mval;
+            for (int k=0; k<asize; ++k)
+               ws[j*asize+k] = roundds((bdataT[j*asize+k]-mean[asize+1+j])*scale);
+            wf[(j>>2)*8+(j&3)] = (float)(mval/32767.0);
+            wf[(j>>2)*8+(j&3)+4] = bdataT[boff+j];
+         }
+         if (d->opt > 1) // shuffle weight order for asm
+         {
+            int16_t *rs = (int16_t*)malloc(nnst*2*asize*sizeof(int16_t));
+            memcpy(rs,ws,nnst*2*asize*sizeof(int16_t));
+            for (int j=0; j<nnst*2; ++j)
+               for (int k=0; k<asize; ++k)
+                  ws[(j>>2)*asize*4+(k>>3)*32+(j&3)*8+(k&7)] = rs[j*asize+k];
+            free(rs);
+         }
+      }
+      else // use float dot products
+      {
+         // Factor mean removal into weights, and remove global
+         // offset from softmax neurons.
+         for (int j=0; j<nnst*2; ++j)
+         {
+            for (int k=0; k<asize; ++k)
+            {
+               const double q = j < nnst ? mean[k] : 0.0;
+               if (d->opt > 1) // shuffle weight order for asm
+                  d->weights1[i][(j>>2)*asize*4+(k>>2)*16+(j&3)*4+(k&3)] = 
+                     bdataT[j*asize+k]-mean[asize+1+j]-q;
+               else
+                  d->weights1[i][j*asize+k] = bdataT[j*asize+k]-mean[asize+1+j]-q;
+            }
+            d->weights1[i][boff+j] = bdataT[boff+j]-(j<nnst?mean[asize]:0.0);
+         }
+      }
+      free(mean);
+   }
+
+   //free(bdata);
+
+   d->nns = nnsTable[d->nnsparam];
+   d->xdia = xdiaTable[d->nsize];
+   d->ydia = ydiaTable[d->nsize];
+   d->asize = xdiaTable[d->nsize] * ydiaTable[d->nsize];
+
+   // Select the functions
+   // evalFunc_0
+   if (d->opt == 1)
+      processLine0 = processLine0_C;
+   else
+      processLine0 = processLine0_maybeSSE2;
+
+   if (d->pscrn < 2) { // original prescreener
+      if (d->fapprox & 1) { // int16 dot products
+         if (d->opt == 1) {
+            uc2s = uc2s48_C;
+            computeNetwork0 = computeNetwork0_i16_C;
+         } else {
+            uc2s = nnedi3_uc2s48_SSE2;
+            computeNetwork0 = nnedi3_computeNetwork0_i16_SSE2;
+         }
+      } else {
+         if (d->opt == 1) {
+            uc2s = uc2f48_C;
+            computeNetwork0 = computeNetwork0_C;
+         } else {
+            uc2s = nnedi3_uc2f48_SSE2;
+            computeNetwork0 = nnedi3_computeNetwork0_SSE2;
+         }
+      }
+   } else { // new prescreener
+      // only int16 dot products
+      if (d->opt == 1) {
+         uc2s = uc2s64_C;
+         computeNetwork0 = computeNetwork0new_C;
+      } else {
+         uc2s = nnedi3_uc2s64_SSE2;
+         computeNetwork0 = nnedi3_computeNetwork0new_SSE2;
+      }
+   }
+
+   // evalFunc_1
+   if (d->opt == 1)
+      wae5 = weightedAvgElliottMul5_m16_C;
+   else
+      wae5 = nnedi3_weightedAvgElliottMul5_m16_SSE2;
+
+   if (d->fapprox & 2) { // use int16 dot products
+      if (d->opt == 1) {
+         extract = extract_m8_i16_C;
+         dotProd = dotProdS_C;
+      } else {
+         extract = nnedi3_extract_m8_i16_SSE2;
+         dotProd = (d->asize % 48) ? nnedi3_dotProd_m32_m16_i16_SSE2 : nnedi3_dotProd_m48_m16_i16_SSE2;
+      }
+   } else { // use float dot products
+      if (d->opt == 1) {
+         extract = extract_m8_C;
+         dotProd = dotProd_C;
+      } else {
+         extract = nnedi3_extract_m8_SSE2;
+         dotProd = (d->asize % 48) ? nnedi3_dotProd_m32_m16_SSE2 : nnedi3_dotProd_m48_m16_SSE2;
+      }
+   }
+
+   if ((d->fapprox & 12) == 0) { // use slow exp
+      if (d->opt == 1)
+         expfunc = e2_m16_C;
+      else
+         expfunc = nnedi3_e2_m16_SSE2;
+   } else if ((d->fapprox & 12) == 4) { // use faster exp
+      if (d->opt == 1)
+         expfunc = e1_m16_C;
+      else
+         expfunc = nnedi3_e1_m16_SSE2;
+   } else { // use fastest exp
+      if (d->opt == 1)
+         expfunc = e0_m16_C;
+      else
+         expfunc = nnedi3_e0_m16_SSE2;
+   }
+}
+
+
+int modnpf(const int m, const int n)
+{
+   if ((m%n) == 0)
+      return m;
+   return m+n-(m%n);
 }
 
 
