@@ -31,6 +31,7 @@ extern void nnedi3_e2_m16_SSE2(float *s, const int n);
 extern void nnedi3_extract_m8_SSE2(const uint8_t *srcp, const int stride, const int xdia, const int ydia, float *mstd, float *input);
 extern void nnedi3_dotProd_m32_m16_SSE2(const float *data, const float *weights, float *vals, const int n, const int len, const float *istd);
 extern void nnedi3_dotProd_m48_m16_i16_SSE2(const float *dataf, const float *weightsf, float *vals, const int n, const int len, const float *istd);
+extern void nnedi3_dotProd_m48_m16_SSE2(const float *data, const float *weights, float *vals, const int n, const int len, const float *istd);
 
 
 typedef struct {
@@ -446,9 +447,6 @@ void dotProdS_C(const float *dataf, const float *weightsf,
 
 
 
-__declspec(naked) void dotProd_m48_m16_SSE2(const float *data, const float *weights, 
-   float *vals, const int n, const int len, const float *istd) {
-}
 
 
 
@@ -923,7 +921,7 @@ void evalFunc_1(void **instanceData, FrameData *frameData)
       if (opt == 1)
          dotProd = dotProd_C;
       else
-         dotProd = (asize%48) ? nnedi3_dotProd_m32_m16_SSE2 : dotProd_m48_m16_SSE2;
+         dotProd = (asize%48) ? nnedi3_dotProd_m32_m16_SSE2 : nnedi3_dotProd_m48_m16_SSE2;
    }
    if ((fapprox & 12) == 0) // use slow exp
    {
