@@ -243,7 +243,7 @@ void uc2s48_C(const uint8_t *t, const int pitch, float *pf)
 
 int32_t processLine0_maybeSSE2(const uint8_t *tempu, int width, uint8_t *dstp,
    const uint8_t *src3p, const int src_pitch) {
-   int32_t count;
+   int32_t count = 0;
    const int remain = width & 15;
    width -= remain;
    if (width)
