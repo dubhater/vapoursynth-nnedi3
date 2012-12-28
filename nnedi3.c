@@ -34,17 +34,6 @@ extern void nnedi3_dotProd_m48_m16_i16_SSE2(const float *dataf, const float *wei
 extern void nnedi3_dotProd_m48_m16_SSE2(const float *data, const float *weights, float *vals, const int n, const int len, const float *istd);
 
 
-// Functions used in evalFunc_0
-void (*uc2s)(const uint8_t*, const int, float*);
-void (*computeNetwork0)(const float*, const float*, uint8_t *d);
-int32_t (*processLine0)(const uint8_t*, int, uint8_t*, const uint8_t*, const int);
-
-// Functions used in evalFunc_1
-void (*extract)(const uint8_t*, const int, const int, const int, float*, float*);
-void (*dotProd)(const float*, const float*, float*, const int, const int, const float*);
-void (*expfunc)(float *, const int);
-void (*wae5)(const float*, const int, float*);
-
 
 typedef struct {
    VSNodeRef *node;
@@ -68,6 +57,17 @@ typedef struct {
    int pscrn;
    int opt;
    int fapprox;
+
+   // Functions used in evalFunc_0
+   void (*uc2s)(const uint8_t*, const int, float*);
+   void (*computeNetwork0)(const float*, const float*, uint8_t *d);
+   int32_t (*processLine0)(const uint8_t*, int, uint8_t*, const uint8_t*, const int);
+
+   // Functions used in evalFunc_1
+   void (*extract)(const uint8_t*, const int, const int, const int, float*, float*);
+   void (*dotProd)(const float*, const float*, float*, const int, const int, const float*);
+   void (*expfunc)(float *, const int);
+   void (*wae5)(const float*, const int, float*);
 } nnedi3Data;
 
 
@@ -364,10 +364,10 @@ void evalFunc_0(void **instanceData, FrameData *frameData)
          {
             for (int x=32; x<width-32; ++x)
             {
-               uc2s(src3p+x-5,src_stride,input);
-               computeNetwork0(input,weights0,tempu+x);
+               d->uc2s(src3p+x-5,src_stride,input);
+               d->computeNetwork0(input,weights0,tempu+x);
             }
-            lcount[y] += processLine0(tempu+32,width-64,dstp+32,src3p+32,src_stride);
+            lcount[y] += d->processLine0(tempu+32,width-64,dstp+32,src3p+32,src_stride);
             src3p += src_stride*2;
             dstp += dst_stride*2;
          }
@@ -378,10 +378,10 @@ void evalFunc_0(void **instanceData, FrameData *frameData)
          {
             for (int x=32; x<width-32; x+=4)
             {
-               uc2s(src3p+x-6,src_stride,input);
-               computeNetwork0(input,weights0,tempu+x);
+               d->uc2s(src3p+x-6,src_stride,input);
+               d->computeNetwork0(input,weights0,tempu+x);
             }
-            lcount[y] += processLine0(tempu+32,width-64,dstp+32,src3p+32,src_stride);
+            lcount[y] += d->processLine0(tempu+32,width-64,dstp+32,src3p+32,src_stride);
             src3p += src_stride*2;
             dstp += dst_stride*2;
          }
@@ -575,12 +575,12 @@ void evalFunc_1(void **instanceData, FrameData *frameData)
                continue;
 
             float mstd[4];
-            extract(srcpp+x,src_stride,xdia,ydia,mstd,input);
+            d->extract(srcpp+x,src_stride,xdia,ydia,mstd,input);
             for (int i=0; i<qual; ++i)
             {
-               dotProd(input,weights1[i],temp,nns*2,asize,mstd+2);
-               expfunc(temp,nns);
-               wae5(temp,nns,mstd);
+               d->dotProd(input,weights1[i],temp,nns*2,asize,mstd+2);
+               d->expfunc(temp,nns);
+               d->wae5(temp,nns,mstd);
             }
             if (opt > 1)
                nnedi3_castScale_SSE(mstd,&scale,dstp+x);
@@ -853,78 +853,78 @@ static void VS_CC nnedi3Init(VSMap *in, VSMap *out, void **instanceData, VSNode 
    // Select the functions
    // evalFunc_0
    if (d->opt == 1)
-      processLine0 = processLine0_C;
+      d->processLine0 = processLine0_C;
    else
-      processLine0 = processLine0_maybeSSE2;
+      d->processLine0 = processLine0_maybeSSE2;
 
    if (d->pscrn < 2) { // original prescreener
       if (d->fapprox & 1) { // int16 dot products
          if (d->opt == 1) {
-            uc2s = uc2s48_C;
-            computeNetwork0 = computeNetwork0_i16_C;
+            d->uc2s = uc2s48_C;
+            d->computeNetwork0 = computeNetwork0_i16_C;
          } else {
-            uc2s = nnedi3_uc2s48_SSE2;
-            computeNetwork0 = nnedi3_computeNetwork0_i16_SSE2;
+            d->uc2s = nnedi3_uc2s48_SSE2;
+            d->computeNetwork0 = nnedi3_computeNetwork0_i16_SSE2;
          }
       } else {
          if (d->opt == 1) {
-            uc2s = uc2f48_C;
-            computeNetwork0 = computeNetwork0_C;
+            d->uc2s = uc2f48_C;
+            d->computeNetwork0 = computeNetwork0_C;
          } else {
-            uc2s = nnedi3_uc2f48_SSE2;
-            computeNetwork0 = nnedi3_computeNetwork0_SSE2;
+            d->uc2s = nnedi3_uc2f48_SSE2;
+            d->computeNetwork0 = nnedi3_computeNetwork0_SSE2;
          }
       }
    } else { // new prescreener
       // only int16 dot products
       if (d->opt == 1) {
-         uc2s = uc2s64_C;
-         computeNetwork0 = computeNetwork0new_C;
+         d->uc2s = uc2s64_C;
+         d->computeNetwork0 = computeNetwork0new_C;
       } else {
-         uc2s = nnedi3_uc2s64_SSE2;
-         computeNetwork0 = nnedi3_computeNetwork0new_SSE2;
+         d->uc2s = nnedi3_uc2s64_SSE2;
+         d->computeNetwork0 = nnedi3_computeNetwork0new_SSE2;
       }
    }
 
    // evalFunc_1
    if (d->opt == 1)
-      wae5 = weightedAvgElliottMul5_m16_C;
+      d->wae5 = weightedAvgElliottMul5_m16_C;
    else
-      wae5 = nnedi3_weightedAvgElliottMul5_m16_SSE2;
+      d->wae5 = nnedi3_weightedAvgElliottMul5_m16_SSE2;
 
    if (d->fapprox & 2) { // use int16 dot products
       if (d->opt == 1) {
-         extract = extract_m8_i16_C;
-         dotProd = dotProdS_C;
+         d->extract = extract_m8_i16_C;
+         d->dotProd = dotProdS_C;
       } else {
-         extract = nnedi3_extract_m8_i16_SSE2;
-         dotProd = (d->asize % 48) ? nnedi3_dotProd_m32_m16_i16_SSE2 : nnedi3_dotProd_m48_m16_i16_SSE2;
+         d->extract = nnedi3_extract_m8_i16_SSE2;
+         d->dotProd = (d->asize % 48) ? nnedi3_dotProd_m32_m16_i16_SSE2 : nnedi3_dotProd_m48_m16_i16_SSE2;
       }
    } else { // use float dot products
       if (d->opt == 1) {
-         extract = extract_m8_C;
-         dotProd = dotProd_C;
+         d->extract = extract_m8_C;
+         d->dotProd = dotProd_C;
       } else {
-         extract = nnedi3_extract_m8_SSE2;
-         dotProd = (d->asize % 48) ? nnedi3_dotProd_m32_m16_SSE2 : nnedi3_dotProd_m48_m16_SSE2;
+         d->extract = nnedi3_extract_m8_SSE2;
+         d->dotProd = (d->asize % 48) ? nnedi3_dotProd_m32_m16_SSE2 : nnedi3_dotProd_m48_m16_SSE2;
       }
    }
 
    if ((d->fapprox & 12) == 0) { // use slow exp
       if (d->opt == 1)
-         expfunc = e2_m16_C;
+         d->expfunc = e2_m16_C;
       else
-         expfunc = nnedi3_e2_m16_SSE2;
+         d->expfunc = nnedi3_e2_m16_SSE2;
    } else if ((d->fapprox & 12) == 4) { // use faster exp
       if (d->opt == 1)
-         expfunc = e1_m16_C;
+         d->expfunc = e1_m16_C;
       else
-         expfunc = nnedi3_e1_m16_SSE2;
+         d->expfunc = nnedi3_e1_m16_SSE2;
    } else { // use fastest exp
       if (d->opt == 1)
-         expfunc = e0_m16_C;
+         d->expfunc = e0_m16_C;
       else
-         expfunc = nnedi3_e0_m16_SSE2;
+         d->expfunc = nnedi3_e0_m16_SSE2;
    }
 }
 
