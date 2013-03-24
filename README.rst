@@ -40,4 +40,5 @@ A win32 dll can be found here: http://uloz.to/xSuqyUw/nnedi3-dll. sha256sum: 45e
 Things to do
 ============
 
+- Support more than 8 bits/sample.
 - The output is slightly different from the original filter's output (with opt=1). Some pixels are off by one.
