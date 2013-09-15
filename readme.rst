@@ -15,7 +15,7 @@ Usage
 
 Allowed values (ranges are inclusive):
 
-- field: 1..3
+- field: 0..3
 - nsize: 0..6
 - nns: 0..4
 - qual: 1..2
