@@ -28,11 +28,14 @@ Allowed values (ranges are inclusive):
 Compilation
 ===========
 
-To compile the filter in 64 bit Linux (and possibly other Unix-like systems)::
+::
 
-   yasm -f elf64 -o nnedi3-asm.elf64.o -DARCH_X86_64=1 -DPIC nnedi3.asm
-   objcopy --input binary --output elf64-x86-64 --binary-architecture i386 binary1_0.9.4.bin binary1_0.9.4.elf64.o
-   clang -O3 -Wall -Wextra -Wno-unused-parameter -shared -fPIC -o libnnedi3.so nnedi3.c binary1_0.9.4.elf64.o nnedi3-asm.elf64.o
+   ./autogen.sh
+   ./configure
+   make
+
+objcopy from binutils is required.
+yasm is currently not optional.
 
 A win32 dll can be found here: http://uloz.to/xSuqyUw/nnedi3-dll. sha256sum: 45e712f038d23718b912b69fa69a8d603329a02bb19701f06873c2e84ef52dad
 
