@@ -1180,6 +1180,18 @@ static void VS_CC nnedi3Create(const VSMap *in, VSMap *out, void *userData, VSCo
 
 VS_EXTERNAL_API(void) VapourSynthPluginInit(VSConfigPlugin configFunc, VSRegisterFunction registerFunc, VSPlugin *plugin) {
    configFunc("com.deinterlace.nnedi3", "nnedi3", "VapourSynth nnedi3 Filter", VAPOURSYNTH_API_VERSION, 1, plugin);
-   registerFunc("nnedi3", "clip:clip;field:int;dh:int:opt;Y:int:opt;U:int:opt;V:int:opt;nsize:int:opt;nns:int:opt;qual:int:opt;etype:int:opt;pscrn:int:opt;opt:int:opt;fapprox:int:opt;", nnedi3Create, 0, plugin);
+   registerFunc("nnedi3", "clip:clip;"
+                          "field:int;"
+                          "dh:int:opt;"
+                          "Y:int:opt;"
+                          "U:int:opt;"
+                          "V:int:opt;"
+                          "nsize:int:opt;"
+                          "nns:int:opt;"
+                          "qual:int:opt;"
+                          "etype:int:opt;"
+                          "pscrn:int:opt;"
+                          "opt:int:opt;"
+                          "fapprox:int:opt;", nnedi3Create, 0, plugin);
 }
 
