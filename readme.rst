@@ -24,6 +24,29 @@ Allowed values (ranges are inclusive):
 - opt: 1..2
 - fapprox: 0..15
 
+::
+
+   nnedi3.nnedi3_rpow2(clip clip, int rfactor[, int width=clip.width*rfactor, int height=clip.height*rfactor, bint correct_shift=1, int nsize=0, int nns=3, int qual=1, int etype=0, int pscrn=2, int opt=2, int fapprox=15])
+
+Requires Firesledge's fmtconv plugin.
+
+- rfactor
+
+  Magnification factor. It must be a power of 2 between 2 and 1024.
+
+- width
+
+- height
+
+  Dimensions of the output. These parameters only have an effect if *correct_shift* is True.
+  If they are different from the default values, the image will be enlarged by *rfactor* and then scaled to the desired dimensions using fmtconv.
+
+- correct_shift
+
+  If set to True, the shift introduced by nnedi3 will be corrected using fmtconv's spline36 resizer. The same resizer will scale the image to *width*\ ×\ *height* pixels, if those parameters were provided.
+
+  If the video is vertically subsampled, the vertical chroma shift will be corrected regardless of this parameter's value.
+
 
 Compilation
 ===========
@@ -37,7 +60,7 @@ Compilation
 objcopy from binutils is required.
 yasm is currently not optional.
 
-A win32 dll can be found here: http://uloz.to/xSuqyUw/nnedi3-dll. sha256sum: 45e712f038d23718b912b69fa69a8d603329a02bb19701f06873c2e84ef52dad
+DLLs can be found in the "releases" section.
 
 
 Things to do
