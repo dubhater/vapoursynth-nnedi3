@@ -56,7 +56,7 @@ AS_CASE(
       BFDNAME="pe-$BFDARCH"
       AS_IF(
          [test "x$BITS" = "x32"],
-         [ASFLAGS="$ASFLAGS -DPREFIX" OBJCOPY_ARGS="$OBJCOPY_ARGS --prefix-symbols=_"]
+         [ASFLAGS="$ASFLAGS -DPREFIX" OBJCOPY_ARGS="$OBJCOPY_ARGS --prefix-symbols=_" LDFLAGS="-Wl,--kill-at"]
       )
    ],
    [mingw*],
@@ -65,7 +65,7 @@ AS_CASE(
       BFDNAME="pe-$BFDARCH"
       AS_IF(
          [test "x$BITS" = "x32"],
-         [ASFLAGS="$ASFLAGS -DPREFIX" OBJCOPY_ARGS="$OBJCOPY_ARGS --prefix-symbols=_"]
+         [ASFLAGS="$ASFLAGS -DPREFIX" OBJCOPY_ARGS="$OBJCOPY_ARGS --prefix-symbols=_" LDFLAGS="-Wl,--kill-at"]
       )
    ],
    [AC_MSG_ERROR([Unknown host OS])]
