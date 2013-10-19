@@ -1227,19 +1227,19 @@ static void VS_CC nnedi3_rpow2Create(const VSMap *in, VSMap *out, void *userData
    }
 
 
-   stdPlugin = vsapi->getPluginNs("std", core);
+   stdPlugin = vsapi->getPluginByNs("std", core);
    if (!stdPlugin) {
       vsapi->setError(out, "nnedi3_rpow2: std plugin isn't loaded... wtf?");
       vsapi->freeNode(node);
       return;
    }
-   nnedi3Plugin = vsapi->getPluginNs("nnedi3", core);
+   nnedi3Plugin = vsapi->getPluginByNs("nnedi3", core);
    if (!nnedi3Plugin) {
       vsapi->setError(out, "nnedi3_rpow2: nnedi3 plugin isn't loaded... wtf?");
       vsapi->freeNode(node);
       return;
    }
-   fmtcPlugin = vsapi->getPluginNs("fmtc", core);
+   fmtcPlugin = vsapi->getPluginByNs("fmtc", core);
    if (!fmtcPlugin && (correct_shift || vi->format->subSamplingH)) {
       vsapi->setError(out, "nnedi3_rpow2: the fmtconv plugin is required");
       vsapi->freeNode(node);
