@@ -306,6 +306,11 @@ cglobal computeNetwork0new_SSE2, 3, 3, 8
 ; r4 - src_pitch
 INIT_XMM
 cglobal processLine0_SSE2, 5, 6, 8
+%if WIN64
+   ; The parameter is 32 bit. Make sure the high 32 bits are cleared.
+   shl r4, 32
+   shr r4, 32
+%endif
    lea r5,[r3+r4*4]
    pxor m6,m6
    pxor m7,m7
@@ -592,7 +597,7 @@ cglobal dotProd_m32_m16_i16_SSE2, 6, 7, 8
    paddd m3,m7
    add r0,64 ; r0 - dataf
    add r1,256 ; r1 - weightsf
-   sub r4,32 ; r4 - len
+   sub r4d,32 ; r4 - len
    jnz .lloop
    POP r4 ; r4 - len (original)
    mova m4,m0
@@ -1371,14 +1376,14 @@ cglobal dotProd_m32_m16_SSE2, 6, 7, 8
    PUSH r3
    PUSH r5
    mov r5,r0
-   mov r6,r4
+   mov r6d,r4d
 .nloop:
    mov r0,r5
    xorps m0,m0
    xorps m1,m1
    xorps m2,m2
    xorps m3,m3
-   mov r4,r6
+   mov r4d,r6d
 .lloop:
    movaps m4,[r0]
    movaps m5,m4
@@ -1478,7 +1483,7 @@ cglobal dotProd_m32_m16_SSE2, 6, 7, 8
    addps m3,m7
    add r0,128
    add r1,512
-   sub r4,32
+   sub r4d,32
    jnz .lloop
    movaps m4,m0
    movaps m5,m2
@@ -1539,14 +1544,14 @@ cglobal dotProd_m48_m16_i16_SSE2, 6, 7, 8
    PUSH r3
    PUSH r5
    mov r5,r0
-   mov r6,r4
+   mov r6d,r4d
 .nloop:
    mov r0,r5
    pxor m0,m0
    pxor m1,m1
    pxor m2,m2
    pxor m3,m3
-   mov r4,r6
+   mov r4d,r6d
 .lloop:
    movdqa m4,[r0]
    movdqa m5,m4
@@ -1622,7 +1627,7 @@ cglobal dotProd_m48_m16_i16_SSE2, 6, 7, 8
    paddd m3,m7
    add r0,96
    add r1,384
-   sub r4,48
+   sub r4d,48
    jnz .lloop
    movdqa m4,m0
    movdqa m5,m2
@@ -1691,14 +1696,14 @@ cglobal dotProd_m48_m16_SSE2, 6, 7, 8
    PUSH r3
    PUSH r5
    mov r5,r0
-   mov r6,r4
+   mov r6d,r4d
 .nloop:
    mov r0,r5
    xorps m0,m0
    xorps m1,m1
    xorps m2,m2
    xorps m3,m3
-   mov r4,r6
+   mov r4d,r6d
 .lloop:
    movaps m4,[r0]
    movaps m5,m4
@@ -1846,7 +1851,7 @@ cglobal dotProd_m48_m16_SSE2, 6, 7, 8
    addps m3,m7
    add r0,192
    add r1,768
-   sub r4,48
+   sub r4d,48
    jnz .lloop
    movaps m4,m0
    movaps m5,m2
