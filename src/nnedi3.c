@@ -622,11 +622,9 @@ void shufflePreScrnL2L3(float *wf, float *rf, const int opt)
    }
 }
 
-// These names will change based on the file name passed to objcopy.
-// Fuck objcopy.
-extern uint8_t _binary_src_binary1_0_9_4_bin_start;
-//extern uint8_t _binary_src_binary1_0_9_4_bin_end;
-//extern uint8_t _binary_src_binary1_0_9_4_bin_size;
+
+// From binary1.asm
+extern uint8_t binary1;
 
 
 
@@ -634,7 +632,7 @@ static void VS_CC nnedi3Init(VSMap *in, VSMap *out, void **instanceData, VSNode 
    nnedi3Data *d = (nnedi3Data *) * instanceData;
    vsapi->setVideoInfo(&d->vi, 1, node);
 
-   const float* bdata = (const float*)&_binary_src_binary1_0_9_4_bin_start;
+   const float* bdata = (const float*)&binary1;
 
    const int xdiaTable[NUM_NSIZE] = { 8, 16, 32, 48, 8, 16, 32 };
    const int ydiaTable[NUM_NSIZE] = { 6, 6, 6, 6, 4, 4, 4 };

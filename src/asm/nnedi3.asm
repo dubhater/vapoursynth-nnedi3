@@ -1,4 +1,4 @@
-%include "x86inc.asm"
+%include "include/x86inc.asm"
 
 SECTION_RODATA
 sign_bits_f times 4 dd 0x7FFFFFFF
