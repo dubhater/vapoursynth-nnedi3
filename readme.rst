@@ -57,7 +57,6 @@ Compilation
    ./configure
    make
 
-objcopy from binutils is required.
 yasm is currently not optional.
 
 DLLs can be found in the "releases" section.
