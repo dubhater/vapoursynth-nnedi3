@@ -24,6 +24,12 @@ Allowed values (ranges are inclusive):
 - opt: 1..2
 - fapprox: 0..15
 
+When the input clip has more than 8 bits per sample, some parameters' allowed and default values change:
+
+- pscrn: 0, 1, default 1
+- opt: 1, default 1
+- fapprox: 0, 4, 8, 12, default 12
+
 ::
 
    nnedi3.nnedi3_rpow2(clip clip, int rfactor[, int width=clip.width*rfactor, int height=clip.height*rfactor, bint correct_shift=1, int nsize=0, int nns=3, int qual=1, int etype=0, int pscrn=2, int opt=2, int fapprox=15])
@@ -65,5 +71,4 @@ DLLs can be found in the "releases" section.
 Things to do
 ============
 
-- Support more than 8 bits/sample.
-- The output is slightly different from the original filter's output (with opt=1). Some pixels are off by one.
+- Make the 16 bit path fast.

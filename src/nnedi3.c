@@ -35,6 +35,24 @@ extern void nnedi3_dotProd_m48_m16_SSE2(const float *data, const float *weights,
 
 
 
+// Things that mustn't be shared between threads.
+typedef struct {
+    uint8_t *paddedp[3];
+    int padded_stride[3];
+    int padded_width[3];
+    int padded_height[3];
+
+    uint8_t *dstp[3];
+    int dst_stride[3];
+
+    int field[3];
+
+    int32_t *lcount[3];
+    float *input;
+    float *temp;
+} FrameData;
+
+
 typedef struct {
     VSNodeRef *node;
     VSVideoInfo vi;
@@ -58,10 +76,16 @@ typedef struct {
     int opt;
     int fapprox;
 
+    int max_value;
+
+    void (*copyPad)(const VSFrameRef *, FrameData *, void **, int, const VSAPI *);
+    void (*evalFunc_0)(void **, FrameData *);
+    void (*evalFunc_1)(void **, FrameData *);
+
     // Functions used in evalFunc_0
     void (*uc2s)(const uint8_t*, const int, float*);
-    void (*computeNetwork0)(const float*, const float*, uint8_t *d);
-    int32_t (*processLine0)(const uint8_t*, int, uint8_t*, const uint8_t*, const int);
+    void (*computeNetwork0)(const float*, const float*, uint8_t *);
+    int32_t (*processLine0)(const uint8_t*, int, uint8_t*, const uint8_t*, const int, const int);
 
     // Functions used in evalFunc_1
     void (*extract)(const uint8_t*, const int, const int, const int, float*, float*);
@@ -71,26 +95,8 @@ typedef struct {
 } nnedi3Data;
 
 
-// Things that mustn't be shared between threads.
-typedef struct {
-    uint8_t *paddedp[3];
-    int padded_stride[3];
-    int padded_width[3];
-    int padded_height[3];
 
-    uint8_t *dstp[3];
-    int dst_stride[3];
-
-    int field[3];
-
-    int32_t *lcount[3];
-    float *input;
-    float *temp;
-} FrameData;
-
-
-
-static void VS_CC copyPad(const VSFrameRef *src, FrameData *frameData, void **instanceData, int fn, const VSAPI *vsapi) {
+static void copyPad(const VSFrameRef *src, FrameData *frameData, void **instanceData, int fn, const VSAPI *vsapi) {
     const int off = 1 - fn;
 
     nnedi3Data *d = (nnedi3Data *) * instanceData;
@@ -147,6 +153,68 @@ static void VS_CC copyPad(const VSFrameRef *src, FrameData *frameData, void **in
             memcpy(dstp + y*dst_stride,
                     dstp + (y-c)*dst_stride,
                     dst_width);
+        }
+    }
+}
+
+
+static void copyPad_uint16(const VSFrameRef *src, FrameData *frameData, void **instanceData, int fn, const VSAPI *vsapi) {
+    const int off = 1 - fn;
+
+    nnedi3Data *d = (nnedi3Data *) * instanceData;
+
+    for (int plane = 0; plane < d->vi.format->numPlanes; ++plane) {
+        const uint16_t *srcp16 = (const uint16_t *)vsapi->getReadPtr(src, plane);
+        uint16_t *dstp16 = (uint16_t *)frameData->paddedp[plane];
+
+        const int src_stride = vsapi->getStride(src, plane) / 2;
+        const int dst_stride = frameData->padded_stride[plane] / 2;
+
+        const int src_height = vsapi->getFrameHeight(src, plane);
+        const int dst_height = frameData->padded_height[plane];
+
+        const int src_width = vsapi->getFrameWidth(src, plane);
+        const int dst_width = frameData->padded_width[plane];
+
+        // Copy.
+        if (!d->dh) {
+            for (int y = off; y < src_height; y += 2) {
+                memcpy(dstp16 + 32 + (6+y)*dst_stride,
+                        srcp16 + y*src_stride,
+                        src_width * 2);
+            }
+        } else {
+            for (int y = 0; y < src_height; y++) {
+                memcpy(dstp16 + 32 + (6+y*2+off)*dst_stride,
+                        srcp16 + y*src_stride,
+                        src_width * 2);
+            }
+        }
+
+        // And pad.
+        dstp16 += (6+off)*dst_stride;
+        for (int y = 6 + off; y < dst_height - 6; y += 2) {
+            for (int x = 0; x < 32; ++x) {
+                dstp16[x] = dstp16[64-x];
+            }
+            int c = 2;
+            for (int x = dst_width - 32; x < dst_width; ++x, c += 2) {
+                dstp16[x] = dstp16[x-c];
+            }
+            dstp16 += dst_stride*2;
+        }
+
+        dstp16 = (uint16_t *)frameData->paddedp[plane];
+        for (int y = off; y < 6; y += 2) {
+            memcpy(dstp16 + y*dst_stride,
+                    dstp16 + (12+2*off-y)*dst_stride,
+                    dst_width * 2);
+        }
+        int c = 4;
+        for (int y = dst_height - 6 + off; y < dst_height; y += 2, c += 4) {
+            memcpy(dstp16 + y*dst_stride,
+                    dstp16 + (y-c)*dst_stride,
+                    dst_width * 2);
         }
     }
 }
@@ -231,6 +299,17 @@ void uc2f48_C(const uint8_t *t, const int pitch, float *p)
 }
 
 
+// Name's wrong now. The input is no longer unsigned char.
+void uc2f48_uint16_C(const uint8_t *t8, const int pitch, float *p)
+{
+    const uint16_t *t = (const uint16_t *)t8;
+
+    for (int y=0; y<4; ++y)
+        for (int x=0; x<12; ++x)
+            p[y*12+x] = t[y*pitch*2+x];
+}
+
+
 void uc2s48_C(const uint8_t *t, const int pitch, float *pf)
 {
     int16_t *p = (int16_t*)pf;
@@ -242,7 +321,7 @@ void uc2s48_C(const uint8_t *t, const int pitch, float *pf)
 #define CB2(n) max(min((n),254),0)
 
 int32_t processLine0_maybeSSE2(const uint8_t *tempu, int width, uint8_t *dstp,
-        const uint8_t *src3p, const int src_pitch) {
+        const uint8_t *src3p, const int src_pitch, const int max_value) {
     int32_t count = 0;
     const int remain = width & 15;
     width -= remain;
@@ -262,14 +341,13 @@ int32_t processLine0_maybeSSE2(const uint8_t *tempu, int width, uint8_t *dstp,
 
 
 int32_t processLine0_C(const uint8_t *tempu, int width, uint8_t *dstp,
-        const uint8_t *src3p, const int src_pitch)
+        const uint8_t *src3p, const int src_pitch, const int max_value)
 {
     int count = 0;
     for (int x=0; x<width; ++x)
     {
         if (tempu[x])
-            dstp[x] = CB2((19*(src3p[x+src_pitch*2]+src3p[x+src_pitch*4])-
-                        3*(src3p[x]+src3p[x+src_pitch*6])+16)>>5);
+            dstp[x] = CB2((19 * (src3p[x+src_pitch*2] + src3p[x+src_pitch*4]) - 3 * (src3p[x] + src3p[x+src_pitch*6]) + 16) / 32);
         else
         {
             dstp[x] = 255;
@@ -280,6 +358,31 @@ int32_t processLine0_C(const uint8_t *tempu, int width, uint8_t *dstp,
 }
 
 #undef CB2
+
+
+int32_t processLine0_uint16_C(const uint8_t *tempu, int width, uint8_t *dstp8,
+        const uint8_t *src3p8, const int src_pitch, const int max_value)
+{
+    uint16_t *dstp = (uint16_t *)dstp8;
+    const uint16_t *src3p = (const uint16_t *)src3p8;
+
+    int count = 0;
+    for (int x=0; x<width; ++x)
+    {
+        if (tempu[x])
+        {
+            int tmp = (19 * (src3p[x+src_pitch*2] + src3p[x+src_pitch*4]) - 3 * (src3p[x] + src3p[x+src_pitch*6]) + 16) / 32;
+            dstp[x] = VSMAX(VSMIN(tmp, max_value - 1), 0);
+            // Technically the -1 is only needed for 16 bit input.
+        }
+        else
+        {
+            dstp[x] = 65535;
+            ++count;
+        }
+    }
+    return count;
+}
 
 // new prescreener functions
 void uc2s64_C(const uint8_t *t, const int pitch, float *p)
@@ -367,7 +470,7 @@ void evalFunc_0(void **instanceData, FrameData *frameData)
                     d->uc2s(src3p+x-5,src_stride,input);
                     d->computeNetwork0(input,weights0,tempu+x);
                 }
-                lcount[y] += d->processLine0(tempu+32,width-64,dstp+32,src3p+32,src_stride);
+                lcount[y] += d->processLine0(tempu+32,width-64,dstp+32,src3p+32,src_stride, 42); // 42 is the answer
                 src3p += src_stride*2;
                 dstp += dst_stride*2;
             }
@@ -381,7 +484,7 @@ void evalFunc_0(void **instanceData, FrameData *frameData)
                     d->uc2s(src3p+x-6,src_stride,input);
                     d->computeNetwork0(input,weights0,tempu+x);
                 }
-                lcount[y] += d->processLine0(tempu+32,width-64,dstp+32,src3p+32,src_stride);
+                lcount[y] += d->processLine0(tempu+32,width-64,dstp+32,src3p+32,src_stride, 42);
                 src3p += src_stride*2;
                 dstp += dst_stride*2;
             }
@@ -393,6 +496,71 @@ void evalFunc_0(void **instanceData, FrameData *frameData)
                 memset(dstp+32,255,width-64);
                 lcount[y] += width-64;
                 dstp += dst_stride*2;
+            }
+        }
+    }
+}
+
+
+void evalFunc_0_uint16(void **instanceData, FrameData *frameData)
+{
+    nnedi3Data *d = (nnedi3Data*) * instanceData;
+
+    float *input = frameData->input;
+    const float *weights0 = d->weights0;
+    float *temp = frameData->temp;
+    uint8_t *tempu = (uint8_t*)temp;
+
+    // And now the actual work.
+    for (int b = 0; b < d->vi.format->numPlanes; ++b)
+    {
+        if ((b == 0 && !d->Y) || 
+                (b == 1 && !d->U) ||
+                (b == 2 && !d->V))
+            continue;
+
+        const uint16_t *srcp16 = (const uint16_t *)frameData->paddedp[b];
+        const int src_stride = frameData->padded_stride[b] / 2;
+
+        const int width = frameData->padded_width[b];
+        const int height = frameData->padded_height[b];
+
+        uint16_t *dstp16 = (uint16_t *)frameData->dstp[b];
+        const int dst_stride = frameData->dst_stride[b] / 2;
+
+        for (int y = 1 - frameData->field[b]; y < height - 12; y += 2) {
+            memcpy(dstp16 + y*dst_stride,
+                    srcp16 + 32 + (6+y)*src_stride,
+                    (width - 64) * 2);
+        }
+
+        const int ystart = 6 + frameData->field[b];
+        const int ystop = height - 6;
+        srcp16 += ystart*src_stride;
+        dstp16 += (ystart-6)*dst_stride-32;
+        const uint16_t *src3p16 = srcp16 - src_stride*3;
+        int32_t *lcount = frameData->lcount[b]-6;
+        if (d->pscrn == 1) // original
+        {
+            for (int y=ystart; y<ystop; y+=2)
+            {
+                for (int x=32; x<width-32; ++x)
+                {
+                    d->uc2s((const uint8_t *)(src3p16 + x - 5), src_stride, input);
+                    d->computeNetwork0(input, weights0, tempu+x);
+                }
+                lcount[y] += d->processLine0(tempu+32, width-64, (uint8_t *)(dstp16 + 32), (const uint8_t *)(src3p16 + 32), src_stride, d->max_value);
+                src3p16 += src_stride*2;
+                dstp16 += dst_stride*2;
+            }
+        }
+        else // no prescreening
+        {
+            for (int y=ystart; y<ystop; y+=2)
+            {
+                memset(dstp16 + 32, 255, (width - 64) * 2);
+                lcount[y] += width-64;
+                dstp16 += dst_stride*2;
             }
         }
     }
@@ -422,6 +590,36 @@ void extract_m8_C(const uint8_t *srcp, const int stride,
     else
     {
         mstd[1] = sqrtf(mstd[1]);
+        mstd[2] = 1.0f/mstd[1];
+    }
+}
+
+
+void extract_m8_uint16_C(const uint8_t *srcp8, const int stride, 
+        const int xdia, const int ydia, float *mstd, float *input)
+{
+    const uint16_t *srcp = (const uint16_t *)srcp8;
+
+    int64_t sum = 0, sumsq = 0;
+    for (int y=0; y<ydia; ++y)
+    {
+        const uint16_t *srcpT = srcp+y*stride*2;
+        for (int x=0; x<xdia; ++x, ++input)
+        {
+            sum += srcpT[x];
+            sumsq += (uint32_t)srcpT[x]*(uint32_t)srcpT[x];
+            input[0] = srcpT[x];
+        }
+    }
+    const float scale = 1.0f/(xdia*ydia);
+    mstd[0] = sum*scale;
+    const double tmp = (double)sumsq*scale - (double)mstd[0]*mstd[0];
+    mstd[3] = 0.0f;
+    if (tmp <= FLT_EPSILON)
+        mstd[1] = mstd[2] = 0.0f;
+    else
+    {
+        mstd[1] = (float)sqrt(tmp);
         mstd[2] = 1.0f/mstd[1];
     }
 }
@@ -545,7 +743,7 @@ void evalFunc_1(void **instanceData, FrameData *frameData)
     const int asize = d->asize;
     const int nns = d->nns;
     const int xdia = d->xdia;
-    const int xdiad2m1 = (xdia>>1)-1;
+    const int xdiad2m1 = (xdia / 2) - 1;
     const int ydia = d->ydia;
     const float scale = 1.0f/(float)qual;
 
@@ -594,6 +792,68 @@ void evalFunc_1(void **instanceData, FrameData *frameData)
 }
 
 
+void evalFunc_1_uint16(void **instanceData, FrameData *frameData)
+{
+    nnedi3Data *d = (nnedi3Data*) * instanceData;
+
+    float *input = frameData->input;
+    float *temp = frameData->temp;
+    float **weights1 = d->weights1;
+    const int qual = d->qual;
+    const int asize = d->asize;
+    const int nns = d->nns;
+    const int xdia = d->xdia;
+    const int xdiad2m1 = (xdia / 2) - 1;
+    const int ydia = d->ydia;
+    const float scale = 1.0f/(float)qual;
+
+    for (int b = 0; b < d->vi.format->numPlanes; ++b)
+    {
+        if ((b == 0 && !d->Y) || 
+                (b == 1 && !d->U) ||
+                (b == 2 && !d->V))
+            continue;
+
+        const uint16_t *srcp16 = (const uint16_t *)frameData->paddedp[b];
+        const int src_stride = frameData->padded_stride[b] / 2;
+
+        const int width = frameData->padded_width[b];
+        const int height = frameData->padded_height[b];
+
+        uint16_t *dstp16 = (uint16_t *)frameData->dstp[b];
+        const int dst_stride = frameData->dst_stride[b] / 2;
+
+        const int ystart = frameData->field[b];
+        const int ystop = height - 12;
+
+        srcp16 += (ystart+6)*src_stride;
+        dstp16 += ystart*dst_stride-32;
+        const uint16_t *srcpp16 = srcp16 - (ydia-1)*src_stride - xdiad2m1;
+
+        for (int y=ystart; y<ystop; y+=2)
+        {
+            for (int x=32; x<width-32; ++x)
+            {
+                if (dstp16[x] != 65535)
+                    continue;
+
+                float mstd[4];
+                d->extract((const uint8_t *)(srcpp16 + x), src_stride, xdia, ydia, mstd, input);
+                for (int i=0; i<qual; ++i)
+                {
+                    d->dotProd(input, weights1[i], temp, nns*2, asize, mstd+2);
+                    d->expfunc(temp, nns);
+                    d->wae5(temp, nns, mstd);
+                }
+                dstp16[x] = VSMIN(VSMAX((int)(mstd[3]*scale+0.5f), 0), d->max_value);
+            }
+            srcpp16 += src_stride*2;
+            dstp16 += dst_stride*2;
+        }
+    }
+}
+
+
 #define NUM_NSIZE 7
 #define NUM_NNS 5
 
@@ -619,6 +879,116 @@ void shufflePreScrnL2L3(float *wf, float *rf, const int opt)
         for (int k=0; k<8; ++k)
             wf[k*4+j] = rf[jtable[j]*8+k];
         wf[4*8+j] = rf[4*8+jtable[j]];
+    }
+}
+
+
+static void selectFunctions(nnedi3Data *d) {
+    d->copyPad = copyPad;
+    d->evalFunc_0 = evalFunc_0;
+    d->evalFunc_1 = evalFunc_1;
+
+    // evalFunc_0
+    if (d->opt == 1)
+        d->processLine0 = processLine0_C;
+    else
+        d->processLine0 = processLine0_maybeSSE2;
+
+    if (d->pscrn < 2) { // original prescreener
+        if (d->fapprox & 1) { // int16 dot products
+            if (d->opt == 1) {
+                d->uc2s = uc2s48_C;
+                d->computeNetwork0 = computeNetwork0_i16_C;
+            } else {
+                d->uc2s = nnedi3_uc2s48_SSE2;
+                d->computeNetwork0 = nnedi3_computeNetwork0_i16_SSE2;
+            }
+        } else {
+            if (d->opt == 1) {
+                d->uc2s = uc2f48_C;
+                d->computeNetwork0 = computeNetwork0_C;
+            } else {
+                d->uc2s = nnedi3_uc2f48_SSE2;
+                d->computeNetwork0 = nnedi3_computeNetwork0_SSE2;
+            }
+        }
+    } else { // new prescreener
+        // only int16 dot products
+        if (d->opt == 1) {
+            d->uc2s = uc2s64_C;
+            d->computeNetwork0 = computeNetwork0new_C;
+        } else {
+            d->uc2s = nnedi3_uc2s64_SSE2;
+            d->computeNetwork0 = nnedi3_computeNetwork0new_SSE2;
+        }
+    }
+
+    // evalFunc_1
+    if (d->opt == 1)
+        d->wae5 = weightedAvgElliottMul5_m16_C;
+    else
+        d->wae5 = nnedi3_weightedAvgElliottMul5_m16_SSE2;
+
+    if (d->fapprox & 2) { // use int16 dot products
+        if (d->opt == 1) {
+            d->extract = extract_m8_i16_C;
+            d->dotProd = dotProdS_C;
+        } else {
+            d->extract = nnedi3_extract_m8_i16_SSE2;
+            d->dotProd = (d->asize % 48) ? nnedi3_dotProd_m32_m16_i16_SSE2 : nnedi3_dotProd_m48_m16_i16_SSE2;
+        }
+    } else { // use float dot products
+        if (d->opt == 1) {
+            d->extract = extract_m8_C;
+            d->dotProd = dotProd_C;
+        } else {
+            d->extract = nnedi3_extract_m8_SSE2;
+            d->dotProd = (d->asize % 48) ? nnedi3_dotProd_m32_m16_SSE2 : nnedi3_dotProd_m48_m16_SSE2;
+        }
+    }
+
+    if ((d->fapprox & 12) == 0) { // use slow exp
+        if (d->opt == 1)
+            d->expfunc = e2_m16_C;
+        else
+            d->expfunc = nnedi3_e2_m16_SSE2;
+    } else if ((d->fapprox & 12) == 4) { // use faster exp
+        if (d->opt == 1)
+            d->expfunc = e1_m16_C;
+        else
+            d->expfunc = nnedi3_e1_m16_SSE2;
+    } else { // use fastest exp
+        if (d->opt == 1)
+            d->expfunc = e0_m16_C;
+        else
+            d->expfunc = nnedi3_e0_m16_SSE2;
+    }
+}
+
+
+static void selectFunctions_uint16(nnedi3Data *d) {
+    d->copyPad = copyPad_uint16;
+    d->evalFunc_0 = evalFunc_0_uint16;
+    d->evalFunc_1 = evalFunc_1_uint16;
+
+    // evalFunc_0
+    d->processLine0 = processLine0_uint16_C;
+
+    d->uc2s = uc2f48_uint16_C;
+    d->computeNetwork0 = computeNetwork0_C;
+
+    // evalFunc_1
+    d->wae5 = weightedAvgElliottMul5_m16_C;
+
+    d->extract = extract_m8_uint16_C;
+    d->dotProd = dotProd_C;
+
+    if ((d->fapprox & 12) == 0) { // use slow exp
+        d->expfunc = e2_m16_C;
+    } else if ((d->fapprox & 12) == 4) { // use faster exp
+        d->expfunc = e1_m16_C;
+    } else { // use fastest exp
+        d->expfunc = e0_m16_C;
     }
 }
 
@@ -742,7 +1112,7 @@ static void VS_CC nnedi3Init(VSMap *in, VSMap *out, void **instanceData, VSNode 
             // into first layer weights.
             for (int j=0; j<4; ++j)
                 for (int k=0; k<48; ++k)
-                    d->weights0[j*48+k] = (bdata[j*48+k]-mean[j])/127.5;
+                    d->weights0[j*48+k] = (bdata[j*48+k]-mean[j])/ (127.5 * (1 << (d->vi.format->bitsPerSample - 8)));
             memcpy(d->weights0+4*48,bdata+4*48,(dims0-4*48)*sizeof(float));
             if (d->opt > 1) // shuffle weight order for asm
             {
@@ -842,89 +1212,15 @@ static void VS_CC nnedi3Init(VSMap *in, VSMap *out, void **instanceData, VSNode 
         free(mean);
     }
 
-    //free(bdata);
-
     d->nns = nnsTable[d->nnsparam];
     d->xdia = xdiaTable[d->nsize];
     d->ydia = ydiaTable[d->nsize];
     d->asize = xdiaTable[d->nsize] * ydiaTable[d->nsize];
 
-    // Select the functions
-    // evalFunc_0
-    if (d->opt == 1)
-        d->processLine0 = processLine0_C;
+    if (d->vi.format->bitsPerSample == 8)
+        selectFunctions(d);
     else
-        d->processLine0 = processLine0_maybeSSE2;
-
-    if (d->pscrn < 2) { // original prescreener
-        if (d->fapprox & 1) { // int16 dot products
-            if (d->opt == 1) {
-                d->uc2s = uc2s48_C;
-                d->computeNetwork0 = computeNetwork0_i16_C;
-            } else {
-                d->uc2s = nnedi3_uc2s48_SSE2;
-                d->computeNetwork0 = nnedi3_computeNetwork0_i16_SSE2;
-            }
-        } else {
-            if (d->opt == 1) {
-                d->uc2s = uc2f48_C;
-                d->computeNetwork0 = computeNetwork0_C;
-            } else {
-                d->uc2s = nnedi3_uc2f48_SSE2;
-                d->computeNetwork0 = nnedi3_computeNetwork0_SSE2;
-            }
-        }
-    } else { // new prescreener
-        // only int16 dot products
-        if (d->opt == 1) {
-            d->uc2s = uc2s64_C;
-            d->computeNetwork0 = computeNetwork0new_C;
-        } else {
-            d->uc2s = nnedi3_uc2s64_SSE2;
-            d->computeNetwork0 = nnedi3_computeNetwork0new_SSE2;
-        }
-    }
-
-    // evalFunc_1
-    if (d->opt == 1)
-        d->wae5 = weightedAvgElliottMul5_m16_C;
-    else
-        d->wae5 = nnedi3_weightedAvgElliottMul5_m16_SSE2;
-
-    if (d->fapprox & 2) { // use int16 dot products
-        if (d->opt == 1) {
-            d->extract = extract_m8_i16_C;
-            d->dotProd = dotProdS_C;
-        } else {
-            d->extract = nnedi3_extract_m8_i16_SSE2;
-            d->dotProd = (d->asize % 48) ? nnedi3_dotProd_m32_m16_i16_SSE2 : nnedi3_dotProd_m48_m16_i16_SSE2;
-        }
-    } else { // use float dot products
-        if (d->opt == 1) {
-            d->extract = extract_m8_C;
-            d->dotProd = dotProd_C;
-        } else {
-            d->extract = nnedi3_extract_m8_SSE2;
-            d->dotProd = (d->asize % 48) ? nnedi3_dotProd_m32_m16_SSE2 : nnedi3_dotProd_m48_m16_SSE2;
-        }
-    }
-
-    if ((d->fapprox & 12) == 0) { // use slow exp
-        if (d->opt == 1)
-            d->expfunc = e2_m16_C;
-        else
-            d->expfunc = nnedi3_e2_m16_SSE2;
-    } else if ((d->fapprox & 12) == 4) { // use faster exp
-        if (d->opt == 1)
-            d->expfunc = e1_m16_C;
-        else
-            d->expfunc = nnedi3_e1_m16_SSE2;
-    } else { // use fastest exp
-        if (d->opt == 1)
-            d->expfunc = e0_m16_C;
-        else
-            d->expfunc = nnedi3_e0_m16_SSE2;
-    }
+        selectFunctions_uint16(d);
 }
 
 
@@ -968,7 +1264,7 @@ static const VSFrameRef *VS_CC nnedi3GetFrame(int n, int activationReason, void 
 
             frameData->padded_width[plane]  = dst_width + 64;
             frameData->padded_height[plane] = dst_height + 12;
-            frameData->padded_stride[plane] = modnpf(frameData->padded_width[plane] + min_pad, min_alignment);
+            frameData->padded_stride[plane] = modnpf(frameData->padded_width[plane] * d->vi.format->bytesPerSample + min_pad, min_alignment); // TODO: maybe min_pad is in pixels too?
             VS_ALIGNED_MALLOC(&frameData->paddedp[plane], frameData->padded_stride[plane] * frameData->padded_height[plane], min_alignment);
 
             frameData->dstp[plane] = vsapi->getWritePtr(dst, plane);
@@ -984,14 +1280,14 @@ static const VSFrameRef *VS_CC nnedi3GetFrame(int n, int activationReason, void 
         VS_ALIGNED_MALLOC(&frameData->temp, 2048 * sizeof(float), 16);
 
         // Copy src to a padded "frame" in frameData and mirror the edges.
-        copyPad(src, frameData, instanceData, field_n, vsapi);
+        d->copyPad(src, frameData, instanceData, field_n, vsapi);
 
 
-        // Handles prescreening and probably the cubic interpolation.
-        evalFunc_0(instanceData, frameData);
-        //
+        // Handles prescreening and the cubic interpolation.
+        d->evalFunc_0(instanceData, frameData);
+
         // The rest.
-        evalFunc_1(instanceData, frameData);
+        d->evalFunc_1(instanceData, frameData);
 
 
         // Clean up.
@@ -1038,8 +1334,8 @@ static void VS_CC nnedi3Create(const VSMap *in, VSMap *out, void *userData, VSCo
     d.vi = *vsapi->getVideoInfo(d.node);
 
     if (!d.vi.format || d.vi.format->sampleType != stInteger
-            || d.vi.format->bitsPerSample != 8) {
-        vsapi->setError(out, "nnedi3: only constant format 8 bit integer input supported");
+            || d.vi.format->bitsPerSample > 16) {
+        vsapi->setError(out, "nnedi3: only constant format 8..16 bit integer input supported");
         vsapi->freeNode(d.node);
         return;
     }
@@ -1082,17 +1378,26 @@ static void VS_CC nnedi3Create(const VSMap *in, VSMap *out, void *userData, VSCo
 
     d.pscrn = vsapi->propGetInt(in, "pscrn", 0, &err);
     if (err) {
-        d.pscrn = 2;
+        if (d.vi.format->bitsPerSample == 8)
+            d.pscrn = 2;
+        else
+            d.pscrn = 1;
     }
 
     d.opt = vsapi->propGetInt(in, "opt", 0, &err);
     if (err) {
-        d.opt = 2;
+        if (d.vi.format->bitsPerSample == 8)
+            d.opt = 2;
+        else
+            d.opt = 1;
     }
 
     d.fapprox = vsapi->propGetInt(in, "fapprox", 0, &err);
     if (err) {
-        d.fapprox = 15;
+        if (d.vi.format->bitsPerSample == 8)
+            d.fapprox = 15;
+        else
+            d.fapprox = 12;
     }
 
     // Check the values.
@@ -1138,22 +1443,46 @@ static void VS_CC nnedi3Create(const VSMap *in, VSMap *out, void *userData, VSCo
         return;
     }
 
-    if (d.pscrn < 0 || d.pscrn > 4) {
-        vsapi->setError(out, "nnedi3: pscrn must be between 0 and 4 (inclusive)");
-        vsapi->freeNode(d.node);
-        return;
+    if (d.vi.format->bitsPerSample == 8) {
+        if (d.pscrn < 0 || d.pscrn > 4) {
+            vsapi->setError(out, "nnedi3: pscrn must be between 0 and 4 (inclusive)");
+            vsapi->freeNode(d.node);
+            return;
+        }
+    } else {
+        if (d.pscrn < 0 || d.pscrn > 1) {
+            vsapi->setError(out, "nnedi3: pscrn must be between 0 and 1 (inclusive)");
+            vsapi->freeNode(d.node);
+            return;
+        }
     }
 
-    if (d.opt < 1 || d.opt > 2) {
-        vsapi->setError(out, "nnedi3: opt must be 1 or 2");
-        vsapi->freeNode(d.node);
-        return;
+    if (d.vi.format->bitsPerSample == 8) {
+        if (d.opt < 1 || d.opt > 2) {
+            vsapi->setError(out, "nnedi3: opt must be 1 or 2");
+            vsapi->freeNode(d.node);
+            return;
+        }
+    } else {
+        if (d.opt > 1) {
+            vsapi->setError(out, "nnedi3: opt must be 1");
+            vsapi->freeNode(d.node);
+            return;
+        }
     }
 
-    if (d.fapprox < 0 || d.fapprox > 15) {
-        vsapi->setError(out, "nnedi3: fapprox must be between 0 and 15 (inclusive)");
-        vsapi->freeNode(d.node);
-        return;
+    if (d.vi.format->bitsPerSample == 8) {
+        if (d.fapprox < 0 || d.fapprox > 15) {
+            vsapi->setError(out, "nnedi3: fapprox must be between 0 and 15 (inclusive)");
+            vsapi->freeNode(d.node);
+            return;
+        }
+    } else {
+        if (d.fapprox != 0 && d.fapprox != 4 && d.fapprox != 8 && d.fapprox != 12) {
+            vsapi->setError(out, "nnedi3: fapprox must be 4, 8, or 12");
+            vsapi->freeNode(d.node);
+            return;
+        }
     }
 
     // Changing the video info probably has to be done before createFilter.
@@ -1166,6 +1495,7 @@ static void VS_CC nnedi3Create(const VSMap *in, VSMap *out, void *userData, VSCo
         d.vi.height *= 2;
     }
 
+    d.max_value = 65535 >> (16 - d.vi.format->bitsPerSample);
 
 
     data = malloc(sizeof(d));
@@ -1411,7 +1741,7 @@ static void VS_CC nnedi3_rpow2Create(const VSMap *in, VSMap *out, void *userData
 
 
 VS_EXTERNAL_API(void) VapourSynthPluginInit(VSConfigPlugin configFunc, VSRegisterFunction registerFunc, VSPlugin *plugin) {
-    configFunc("com.deinterlace.nnedi3", "nnedi3", "VapourSynth nnedi3 Filter", VAPOURSYNTH_API_VERSION, 1, plugin);
+    configFunc("com.deinterlace.nnedi3", "nnedi3", "Neural network edge directed interpolation", VAPOURSYNTH_API_VERSION, 1, plugin);
     registerFunc("nnedi3", "clip:clip;"
                            "field:int;"
                            "dh:int:opt;"
