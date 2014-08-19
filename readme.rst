@@ -72,3 +72,9 @@ Things to do
 ============
 
 - Make the 16 bit path fast.
+
+
+License
+=======
+
+GPLv2.
