@@ -27,7 +27,6 @@ Allowed values (ranges are inclusive):
 When the input clip has more than 8 bits per sample, some parameters' allowed and default values change:
 
 - pscrn: 0, 1, default 1
-- opt: 1, default 1
 - fapprox: 0, 4, 8, 12, default 12
 
 ::
@@ -66,12 +65,6 @@ Compilation
 yasm is currently not optional.
 
 DLLs can be found in the "releases" section.
-
-
-Things to do
-============
-
-- Make the 16 bit path fast.
 
 
 License

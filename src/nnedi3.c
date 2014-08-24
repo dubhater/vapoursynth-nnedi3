@@ -991,24 +991,46 @@ static void selectFunctions_uint16(nnedi3Data *d) {
     d->evalFunc_0 = evalFunc_0_uint16;
     d->evalFunc_1 = evalFunc_1_uint16;
 
-    // evalFunc_0
-    d->processLine0 = processLine0_uint16_C;
+    if (d->opt == 1) {
+        // evalFunc_0
+        d->processLine0 = processLine0_uint16_C;
 
-    d->uc2s = uc2f48_uint16_C;
-    d->computeNetwork0 = computeNetwork0_C;
+        d->uc2s = uc2f48_uint16_C;
+        d->computeNetwork0 = computeNetwork0_C;
 
-    // evalFunc_1
-    d->wae5 = weightedAvgElliottMul5_m16_C;
+        // evalFunc_1
+        d->wae5 = weightedAvgElliottMul5_m16_C;
 
-    d->extract = extract_m8_uint16_C;
-    d->dotProd = dotProd_C;
+        d->extract = extract_m8_uint16_C;
+        d->dotProd = dotProd_C;
 
-    if ((d->fapprox & 12) == 0) { // use slow exp
-        d->expfunc = e2_m16_C;
-    } else if ((d->fapprox & 12) == 4) { // use faster exp
-        d->expfunc = e1_m16_C;
-    } else { // use fastest exp
-        d->expfunc = e0_m16_C;
+        if ((d->fapprox & 12) == 0) { // use slow exp
+            d->expfunc = e2_m16_C;
+        } else if ((d->fapprox & 12) == 4) { // use faster exp
+            d->expfunc = e1_m16_C;
+        } else { // use fastest exp
+            d->expfunc = e0_m16_C;
+        }
+    } else { // opt == 2
+        // evalFunc_0
+        d->processLine0 = processLine0_uint16_C; // C works too
+
+        d->uc2s = uc2f48_uint16_C; // C works too
+        d->computeNetwork0 = nnedi3_computeNetwork0_SSE2;
+
+        // evalFunc_1
+        d->wae5 = nnedi3_weightedAvgElliottMul5_m16_SSE2;
+
+        d->extract = extract_m8_uint16_C; // C works too
+        d->dotProd = (d->asize % 48) ? nnedi3_dotProd_m32_m16_SSE2 : nnedi3_dotProd_m48_m16_SSE2;
+
+        if ((d->fapprox & 12) == 0) { // use slow exp
+            d->expfunc = nnedi3_e2_m16_SSE2;
+        } else if ((d->fapprox & 12) == 4) { // use faster exp
+            d->expfunc = nnedi3_e1_m16_SSE2;
+        } else { // use fastest exp
+            d->expfunc = nnedi3_e0_m16_SSE2;
+        }
     }
 }
 
@@ -1406,10 +1428,7 @@ static void VS_CC nnedi3Create(const VSMap *in, VSMap *out, void *userData, VSCo
 
     d.opt = vsapi->propGetInt(in, "opt", 0, &err);
     if (err) {
-        if (d.vi.format->bitsPerSample == 8)
-            d.opt = 2;
-        else
-            d.opt = 1;
+        d.opt = 2;
     }
 
     d.fapprox = vsapi->propGetInt(in, "fapprox", 0, &err);
@@ -1477,18 +1496,10 @@ static void VS_CC nnedi3Create(const VSMap *in, VSMap *out, void *userData, VSCo
         }
     }
 
-    if (d.vi.format->bitsPerSample == 8) {
-        if (d.opt < 1 || d.opt > 2) {
-            vsapi->setError(out, "nnedi3: opt must be 1 or 2");
-            vsapi->freeNode(d.node);
-            return;
-        }
-    } else {
-        if (d.opt > 1) {
-            vsapi->setError(out, "nnedi3: opt must be 1");
-            vsapi->freeNode(d.node);
-            return;
-        }
+    if (d.opt < 1 || d.opt > 2) {
+        vsapi->setError(out, "nnedi3: opt must be 1 or 2");
+        vsapi->freeNode(d.node);
+        return;
     }
 
     if (d.vi.format->bitsPerSample == 8) {
