@@ -1039,7 +1039,7 @@ static void selectFunctions_uint16(nnedi3Data *d) {
 extern uint8_t binary1;
 
 
-
+int dims1offset;
 static void VS_CC nnedi3Init(VSMap *in, VSMap *out, void **instanceData, VSNode *node, VSCore *core, const VSAPI *vsapi) {
     nnedi3Data *d = (nnedi3Data *) * instanceData;
     vsapi->setVideoInfo(&d->vi, 1, node);
@@ -1054,7 +1054,6 @@ static void VS_CC nnedi3Init(VSMap *in, VSMap *out, void **instanceData, VSNode 
     const int dims0new = 4*65+4*5;
     const int dims1 = nnsTable[d->nnsparam]*2*(xdiaTable[d->nsize]*ydiaTable[d->nsize]+1);
     int dims1tsize = 0;
-    int dims1offset;
 
     for (int j=0; j<NUM_NNS; ++j)
     {
