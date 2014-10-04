@@ -17,6 +17,8 @@ am__v_YASM_1 =
 
 libnnedi3_la_SOURCES = src/nnedi3.c src/asm/nnedi3.asm src/asm/binary1.asm
 
+libnnedi3_la_LIBADD = $(LIBOBJS)
+
 libnnedi3_la_LDFLAGS = -no-undefined -avoid-version -Xlinker src/asm/nnedi3.o -Xlinker src/asm/binary1.o
 
 libnnedi3_la_DEPENDENCIES = src/asm/nnedi3.o src/asm/binary1.o

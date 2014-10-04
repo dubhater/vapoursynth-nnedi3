@@ -63,6 +63,7 @@ AS_CASE(
 )
 AC_SUBST([ASFLAGS])
 
+AC_CHECK_LIB([m], [main])
 PKG_CHECK_MODULES([VapourSynth], [vapoursynth])
 
 AC_CONFIG_FILES([Makefile])
