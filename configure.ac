@@ -11,6 +11,10 @@ AC_CANONICAL_HOST
 
 AC_PROG_CC_C99
 
+AC_SEARCH_LIBS([sqrt], [m], [], [
+   AC_MSG_ERROR([unable to find the sqrt() function])
+])
+
 AC_CHECK_PROGS([YASM], [yasm])
 AS_IF(
    [test "x$YASM" = "x"],
