@@ -1054,7 +1054,7 @@ static void VS_CC nnedi3Init(VSMap *in, VSMap *out, void **instanceData, VSNode 
     const int dims0new = 4*65+4*5;
     const int dims1 = nnsTable[d->nnsparam]*2*(xdiaTable[d->nsize]*ydiaTable[d->nsize]+1);
     int dims1tsize = 0;
-    int dims1offset;
+    int dims1offset = 0;
 
     for (int j=0; j<NUM_NNS; ++j)
     {
