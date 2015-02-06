@@ -45,7 +45,7 @@ exp_c2      times 4 dd 1.428606820e-6
 epi32_1     times 4 dd 1
 epi32_0x7f  times 4 dd 0x7F
 
-SECTION .text
+SECTION_TEXT
 
 ; parameters:
 ; const uint8_t *t, const int pitch, float *pf
