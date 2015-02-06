@@ -1,6 +1,6 @@
 AC_INIT([nnedi3], [1], [https://github.com/dubhater/vapoursynth-nnedi3/issues], [nnedi3], [https://github.com/dubhater/vapoursynth-nnedi3/])
 
-: ${CFLAGS="-O2"}
+: ${CFLAGS=""}
 
 AM_INIT_AUTOMAKE([foreign no-dist-gzip dist-xz subdir-objects no-define])
 AM_SILENT_RULES([yes])
@@ -25,7 +25,7 @@ AS_IF(
 AS_CASE(
   [$host_cpu],
   [i?86],   [BITS="32" ASFLAGS="$ASFLAGS -DARCH_X86_64=0"],
-  [x86_64], [BITS="64" ASFLAGS="$ASFLAGS -DARCH_X86_64=1 -DPIC"],
+  [x86_64], [BITS="64" ASFLAGS="$ASFLAGS -DARCH_X86_64=1 -DPIC -m amd64"],
   [AC_MSG_ERROR([Currently nnedi3 can only be compiled for Intel CPUs.])]
 )
 
@@ -35,28 +35,19 @@ AS_CASE(
    [
       ASFLAGS="$ASFLAGS -f macho$BITS -DPREFIX"
    ],
-   [*linux*],
+   [*linux*|gnu*|dragonfly*|*bsd*],
    [
-      ASFLAGS="$ASFLAGS -f elf$BITS"
+      ASFLAGS="$ASFLAGS -f elf"
    ],
-   [gnu*],
+   [cygwin*|mingw*],
    [
-      ASFLAGS="$ASFLAGS -f elf$BITS"
-   ],
-   [cygwin*],
-   [
-      ASFLAGS="$ASFLAGS -f win$BITS"
+      ASFLAGS="$ASFLAGS -f win32"
       AS_IF(
          [test "x$BITS" = "x32"],
-         [ASFLAGS="$ASFLAGS -DPREFIX" LDFLAGS="-Wl,--kill-at"]
-      )
-   ],
-   [mingw*],
-   [
-      ASFLAGS="$ASFLAGS -f win$BITS"
-      AS_IF(
-         [test "x$BITS" = "x32"],
-         [ASFLAGS="$ASFLAGS -DPREFIX" LDFLAGS="-Wl,--kill-at"]
+         [
+          ASFLAGS="$ASFLAGS -DPREFIX"
+          AC_SUBST([PLUGINLDFLAGS], ["-Wl,--kill-at"])
+         ]
       )
    ],
    [AC_MSG_ERROR([Unknown host OS])]
