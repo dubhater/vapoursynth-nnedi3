@@ -29,6 +29,8 @@ AS_CASE(
   [AC_MSG_ERROR([Currently nnedi3 can only be compiled for Intel CPUs.])]
 )
 
+ASFLAGS="$ASFLAGS -Dprivate_prefix=nnedi3"
+
 AS_CASE(
    [$host_os],
    [darwin*],
