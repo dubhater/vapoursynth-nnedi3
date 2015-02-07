@@ -23,15 +23,13 @@ exp_hi   times 4 dd  80.0
 e0_mult  times 4 dd 12102203.161561486 ; (1.0/ln(2))*(2^23)
 e0_bias  times 4 dd 1064866805.0 ; (2^23)*127.0-486411.0
 
-sse_half times 4 dd 0.5
-
 e1_scale times 4 dd 1.4426950409 ; 1/ln(2)
 e1_bias  times 4 dd 12582912.0 ; 3 << 22
 e1_c0    times 4 dd 1.00035
 e1_c1    times 4 dd 0.701277797
 e1_c2    times 4 dd 0.237348593
 
-am_0p5      times 4 dd 0.5 ; this is the same as sse_half...
+am_0p5      times 4 dd 0.5
 am_1        times 4 dd 1.0 ; this is the same as ones_f... why duplicate?
 exp_rln2    times 4 dd 1.442695041 ; e1_scale...
 exp_p0      times 4 dd 1.261771931e-4
@@ -691,29 +689,6 @@ cglobal e0_m16_SSE2, 2, 2, 4
    add r0,64
    sub r1,16
    jnz .eloop16
-   RET
-
-
-; parameters:
-;  const float *val,
-;  const float *scale,
-;  uint8_t *dstp
-INIT_XMM
-cglobal castScale_SSE, 3, 3, 1
-   movss m0,[r0+12]
-   mulss m0,[r1]
-   addss m0,[sse_half]
-   cvttss2si r1,m0
-   cmp r1,255
-   jl .b255
-   mov r1,255
-   jmp .finish
-.b255:
-   cmp r1,0
-   jge .finish
-   xor r1,r1
-.finish:
-   mov byte [r2],r1b ; lowest 8 bits of r1
    RET
 
 

@@ -42,7 +42,6 @@ extern void nnedi3_weightedAvgElliottMul5_m16_SSE2(const float *w, const int n, 
 extern void nnedi3_extract_m8_i16_SSE2(const uint8_t *srcp, const int stride, const int xdia, const int ydia, float *mstd, float *inputf);
 extern void nnedi3_dotProd_m32_m16_i16_SSE2(const float *dataf, const float *weightsf, float *vals, const int n, const int len, const float *istd);
 extern void nnedi3_e0_m16_SSE2(float *s, const int n);
-extern void nnedi3_castScale_SSE(const float *val, const float *scale, uint8_t *dstp);
 extern void nnedi3_computeNetwork0_SSE2(const float *input, const float *weights, uint8_t *d);
 extern void nnedi3_byte2float48_SSE2(const uint8_t *t, const int pitch, float *p);
 extern void nnedi3_computeNetwork0_i16_SSE2(const float *inputf, const float *weightsf, uint8_t *d);
@@ -757,7 +756,6 @@ void evalFunc_1(void **instanceData, FrameData *frameData)
     float *input = frameData->input;
     float *temp = frameData->temp;
     float **weights1 = d->weights1;
-    const int opt = d->opt;
     const int qual = d->qual;
     const int asize = d->asize;
     const int nns = d->nns;
@@ -799,10 +797,7 @@ void evalFunc_1(void **instanceData, FrameData *frameData)
                     d->expfunc(temp,nns);
                     d->wae5(temp,nns,mstd);
                 }
-                if (opt > 1)
-                    nnedi3_castScale_SSE(mstd,&scale,dstp+x);
-                else
-                    dstp[x] = min(max((int)(mstd[3]*scale+0.5f),0),255);
+                dstp[x] = min(max((int)(mstd[3]*scale+0.5f),0),255);
             }
             srcpp += src_stride*2;
             dstp += dst_stride*2;
