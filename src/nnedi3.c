@@ -52,6 +52,13 @@ extern void nnedi3_dotProd_m32_m16_SSE2(const float *data, const float *weights,
 extern void nnedi3_dotProd_m48_m16_i16_SSE2(const float *dataf, const float *weightsf, float *vals, const int n, const int len, const float *istd);
 extern void nnedi3_dotProd_m48_m16_SSE2(const float *data, const float *weights, float *vals, const int n, const int len, const float *istd);
 
+extern void nnedi3_e0_m16_FMA3(float *s, const int n);
+extern void nnedi3_computeNetwork0_FMA3(const float *input, const float *weights, uint8_t *d);
+extern void nnedi3_dotProd_m32_m16_FMA3(const float *data, const float *weights, float *vals, const int n, const int len, const float *istd);
+
+extern void nnedi3_e0_m16_FMA4(float *s, const int n);
+extern void nnedi3_computeNetwork0_FMA4(const float *input, const float *weights, uint8_t *d);
+extern void nnedi3_dotProd_m32_m16_FMA4(const float *data, const float *weights, float *vals, const int n, const int len, const float *istd);
 
 
 // Things that mustn't be shared between threads.
@@ -924,6 +931,10 @@ static void selectFunctions(nnedi3Data *d) {
             } else {
                 d->readPixels = nnedi3_byte2float48_SSE2;
                 d->computeNetwork0 = nnedi3_computeNetwork0_SSE2;
+                if (d->opt == 3)
+                    d->computeNetwork0 = nnedi3_computeNetwork0_FMA3;
+                if (d->opt == 4)
+                    d->computeNetwork0 = nnedi3_computeNetwork0_FMA4;
             }
         }
     } else { // new prescreener
@@ -957,7 +968,14 @@ static void selectFunctions(nnedi3Data *d) {
             d->dotProd = dotProd_C;
         } else {
             d->extract = nnedi3_extract_m8_SSE2;
-            d->dotProd = (d->asize % 48) ? nnedi3_dotProd_m32_m16_SSE2 : nnedi3_dotProd_m48_m16_SSE2;
+            if (d->asize % 48) {
+                d->dotProd = nnedi3_dotProd_m32_m16_SSE2;
+                if (d->opt == 3)
+                    d->dotProd = nnedi3_dotProd_m32_m16_FMA3;
+                if (d->opt == 4)
+                    d->dotProd = nnedi3_dotProd_m32_m16_FMA4;
+            } else
+                d->dotProd = nnedi3_dotProd_m48_m16_SSE2;
         }
     }
 
@@ -974,8 +992,13 @@ static void selectFunctions(nnedi3Data *d) {
     } else { // use fastest exp
         if (d->opt == 1)
             d->expfunc = e0_m16_C;
-        else
+        else {
             d->expfunc = nnedi3_e0_m16_SSE2;
+            if (d->opt == 3)
+                d->expfunc = nnedi3_e0_m16_FMA3;
+            if (d->opt == 4)
+                d->expfunc = nnedi3_e0_m16_FMA4;
+        }
     }
 }
 
@@ -1011,12 +1034,23 @@ static void selectFunctions_uint16(nnedi3Data *d) {
 
         d->readPixels = word2float48_C; // C works too
         d->computeNetwork0 = nnedi3_computeNetwork0_SSE2;
+        if (d->opt == 3)
+            d->computeNetwork0 = nnedi3_computeNetwork0_FMA3;
+        if (d->opt == 4)
+            d->computeNetwork0 = nnedi3_computeNetwork0_FMA4;
 
         // evalFunc_1
         d->wae5 = nnedi3_weightedAvgElliottMul5_m16_SSE2;
 
         d->extract = extract_m8_uint16_C; // C works too
-        d->dotProd = (d->asize % 48) ? nnedi3_dotProd_m32_m16_SSE2 : nnedi3_dotProd_m48_m16_SSE2;
+        if (d->asize % 48) {
+            d->dotProd = nnedi3_dotProd_m32_m16_SSE2;
+            if (d->opt == 3)
+                d->dotProd = nnedi3_dotProd_m32_m16_FMA3;
+            if (d->opt == 4)
+                d->dotProd = nnedi3_dotProd_m32_m16_FMA4;
+        } else
+            d->dotProd = nnedi3_dotProd_m48_m16_SSE2;
 
         if ((d->fapprox & 12) == 0) { // use slow exp
             d->expfunc = nnedi3_e2_m16_SSE2;
@@ -1024,6 +1058,10 @@ static void selectFunctions_uint16(nnedi3Data *d) {
             d->expfunc = nnedi3_e1_m16_SSE2;
         } else { // use fastest exp
             d->expfunc = nnedi3_e0_m16_SSE2;
+            if (d->opt == 3)
+                d->expfunc = nnedi3_e0_m16_FMA3;
+            if (d->opt == 4)
+                d->expfunc = nnedi3_e0_m16_FMA4;
         }
     }
 }
@@ -1490,8 +1528,8 @@ static void VS_CC nnedi3Create(const VSMap *in, VSMap *out, void *userData, VSCo
         }
     }
 
-    if (d.opt < 1 || d.opt > 2) {
-        vsapi->setError(out, "nnedi3: opt must be 1 or 2");
+    if (d.opt < 1 || d.opt > 4) {
+        vsapi->setError(out, "nnedi3: opt must be 1, 2, 3, or 4");
         vsapi->freeNode(d.node);
         return;
     }

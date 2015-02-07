@@ -509,6 +509,8 @@ cglobal dotProd_m32_m16_i16_SSE2, 6, 7, 8, data, weights, vals, n, len, istd
    RET
 
 
+; Used by default with 16 bit input
+;
 ; parameters:
 ;  float *s,
 ;  const int n
@@ -531,6 +533,52 @@ cglobal e0_m16_SSE2, 2, 2, 4
    RET
 
 
+; parameters:
+;  float *s,
+;  const int n
+INIT_XMM
+cglobal e0_m16_FMA3, 2, 2, 4
+   ;mov r0,[esp+4]
+   ;mov r1,[esp+8]
+   movaps m1, [e0_mult]
+.eloop16:
+   movaps m0,[r0]
+   minps m0,[exp_hi]
+   maxps m0,[exp_lo]
+   vfmadd213ps m0, m1, [e0_bias]
+   cvtps2dq m0,m0
+   movaps [r0],m0
+
+   add r0,16
+   sub r1,4
+   jnz .eloop16
+   RET
+
+
+; parameters:
+;  float *s,
+;  const int n
+INIT_XMM
+cglobal e0_m16_FMA4, 2, 2, 4
+   ;mov r0,[esp+4]
+   ;mov r1,[esp+8]
+   movaps m1, [e0_mult]
+.eloop16:
+   movaps m0,[r0]
+   minps m0,[exp_hi]
+   maxps m0,[exp_lo]
+   vfmaddps m0, m0, m1, [e0_bias]
+   cvtps2dq m0,m0
+   movaps [r0],m0
+
+   add r0,16
+   sub r1,4
+   jnz .eloop16
+   RET
+
+
+; Used by default with 16 bit input
+;
 ; parameters:
 ;  const float *input,
 ;  const float *weights,
@@ -630,6 +678,215 @@ cglobal computeNetwork0_SSE2, 3, 5, 8, input, weights, d
    addps m2,m3
    addps m4,m5
    addps m6,m7
+   addps m0,m2
+   addps m4,m6
+   addps m0,m4
+   ;mov ecx/r2,[esp+12]
+   addps m0,[weightsq+864+128]
+   movhlps m1,m0
+   maxps m0,m1
+   pshuflw m1,m0,14
+   comiss m1,m0
+   jbe .finish
+   xor r3,r3
+.finish:
+   mov [dq],r3b
+   RET
+
+
+; parameters:
+;  const float *input,
+;  const float *weights,
+;  uint8_t *d
+INIT_XMM
+cglobal computeNetwork0_FMA3, 3, 5, 8, input, weights, d
+   ;//    dotProd48_m4_SSE(input,weights,temp,4);
+   ;mov r0,[esp+4]
+   ;mov r1,[esp+8]
+   mov r3,1
+
+   xorps m0, m0
+   xorps m1, m1
+   xorps m2, m2
+   xorps m3, m3
+
+   xor r4, r4
+.loop:
+   movaps m4, [inputq + r4]
+   movaps m5, m4
+   movaps m6, m4
+   movaps m7, m4
+
+   vfmadd231ps m0, m4, [weightsq + r4 * 4]
+   vfmadd231ps m1, m5, [weightsq + r4 * 4 + 16]
+   vfmadd231ps m2, m6, [weightsq + r4 * 4 + 32]
+   vfmadd231ps m3, m7, [weightsq + r4 * 4 + 48]
+
+   add r4, 16
+   cmp r4, 192
+   jl .loop
+
+   movaps m4,m0
+   movaps m5,m2
+   unpcklpd m0,m1
+   unpcklpd m2,m3
+   unpckhpd m4,m1
+   unpckhpd m5,m3
+   addps m0,m4
+   addps m2,m5
+   movaps m6,m0
+   shufps m0,m2,136
+   shufps m6,m2,221
+   addps m0,m6
+
+   addps m0,[weightsq+768]
+   ;// const float t = temp[0];
+   ;// elliott4_SSE(temp);
+   ;// temp[0] = t;
+   movaps m1,m0
+   andps m0,[sign_bits_f_zero_l]
+   addps m0,[ones_f]
+   rcpps m0,m0
+   mulps m0,m1
+   ;//    dotProd4_m4_SSE2(temp,weights+4*49,temp+4,4);
+   pshufd m1,m0,0
+   pshufd m2,m0,85
+   pshufd m3,m0,170
+   pshufd m4,m0,255
+   mulps m1,[weightsq+784]
+   vfmadd231ps m1, m2, [weightsq+784+16]
+   mulps m3,[weightsq+784+32]
+   vfmadd231ps m3, m4, [weightsq+784+48]
+   addps m1,m3
+   addps m1,[weightsq+784+64]
+   ;// elliott4_SSE(temp+4);
+   movaps m7,m1
+   andps m1,[sign_bits_f]
+   movaps m3,m0
+   addps m1,[ones_f]
+   rcpps m1,m1
+   mulps m7,m1
+   ;//    dotProd8_m4_SSE2(temp,weights+4*49+4*5,temp+32,4);
+   pshufd m0,m0,0
+   pshufd m1,m3,85
+   pshufd m2,m3,170
+   pshufd m3,m3,255
+   mulps m0,[weightsq+864]
+   vfmadd231ps m0, m1, [weightsq+864+16]
+   mulps m2,[weightsq+864+32]
+   vfmadd231ps m2, m3, [weightsq+864+48]
+   pshufd m4,m7,0
+   pshufd m5,m7,85
+   pshufd m6,m7,170
+   pshufd m7,m7,255
+   mulps m4,[weightsq+864+64]
+   vfmadd231ps m4, m5, [weightsq+864+80]
+   mulps m6,[weightsq+864+96]
+   vfmadd231ps m6, m7, [weightsq+864+112]
+   addps m0,m2
+   addps m4,m6
+   addps m0,m4
+   ;mov ecx/r2,[esp+12]
+   addps m0,[weightsq+864+128]
+   movhlps m1,m0
+   maxps m0,m1
+   pshuflw m1,m0,14
+   comiss m1,m0
+   jbe .finish
+   xor r3,r3
+.finish:
+   mov [dq],r3b
+   RET
+
+
+; parameters:
+;  const float *input,
+;  const float *weights,
+;  uint8_t *d
+INIT_XMM
+cglobal computeNetwork0_FMA4, 3, 5, 8, input, weights, d
+   ;//    dotProd48_m4_SSE(input,weights,temp,4);
+   ;mov r0,[esp+4]
+   ;mov r1,[esp+8]
+   mov r3,1
+
+   xorps m0, m0
+   xorps m1, m1
+   xorps m2, m2
+   xorps m3, m3
+
+   xor r4, r4
+.loop:
+   movaps m4, [inputq + r4]
+   movaps m5, m4
+   movaps m6, m4
+   movaps m7, m4
+
+   vfmaddps m0, m4, [weightsq + r4 * 4], m0
+   vfmaddps m1, m5, [weightsq + r4 * 4 + 16], m1
+   vfmaddps m2, m6, [weightsq + r4 * 4 + 32], m2
+   vfmaddps m3, m7, [weightsq + r4 * 4 + 48], m3
+
+   add r4, 16
+   cmp r4, 192
+   jl .loop
+
+   movaps m4,m0
+   movaps m5,m2
+   unpcklpd m0,m1
+   unpcklpd m2,m3
+   unpckhpd m4,m1
+   unpckhpd m5,m3
+   addps m0,m4
+   addps m2,m5
+   movaps m6,m0
+   shufps m0,m2,136
+   shufps m6,m2,221
+   addps m0,m6
+   addps m0,[weightsq+768]
+   ;// const float t = temp[0];
+   ;// elliott4_SSE(temp);
+   ;// temp[0] = t;
+   movaps m1,m0
+   andps m0,[sign_bits_f_zero_l]
+   addps m0,[ones_f]
+   rcpps m0,m0
+   mulps m0,m1
+   ;//    dotProd4_m4_SSE2(temp,weights+4*49,temp+4,4);
+   pshufd m1,m0,0
+   pshufd m2,m0,85
+   pshufd m3,m0,170
+   pshufd m4,m0,255
+   mulps m1,[weightsq+784]
+   vfmaddps m1, m2, [weightsq+784+16], m1
+   mulps m3,[weightsq+784+32]
+   vfmaddps m3, m4, [weightsq+784+48], m3
+   addps m1,m3
+   addps m1,[weightsq+784+64]
+   ;// elliott4_SSE(temp+4);
+   movaps m7,m1
+   andps m1,[sign_bits_f]
+   movaps m3,m0
+   addps m1,[ones_f]
+   rcpps m1,m1
+   mulps m7,m1
+   ;//    dotProd8_m4_SSE2(temp,weights+4*49+4*5,temp+32,4);
+   pshufd m0,m0,0
+   pshufd m1,m3,85
+   pshufd m2,m3,170
+   pshufd m3,m3,255
+   mulps m0,[weightsq+864]
+   vfmaddps m0, m1, [weightsq+864+16], m0
+   mulps m2,[weightsq+864+32]
+   vfmaddps m2, m3, [weightsq+864+48], m2
+   pshufd m4,m7,0
+   pshufd m5,m7,85
+   pshufd m6,m7,170
+   pshufd m7,m7,255
+   mulps m4,[weightsq+864+64]
+   vfmaddps m4, m5, [weightsq+864+80], m4
+   mulps m6,[weightsq+864+96]
+   vfmaddps m6, m7, [weightsq+864+112], m6
    addps m0,m2
    addps m4,m6
    addps m0,m4
@@ -1021,6 +1278,8 @@ cglobal extract_m8_SSE2, 6, 7, 8, srcp, stride, xdia, ydia, mstd, input
    RET
 
 
+; Used by default with 16 bit input
+;
 ; parameters:
 ;  const float *data,
 ;  const float *weights,
@@ -1087,6 +1346,144 @@ cglobal dotProd_m32_m16_SSE2, 6, 7, 8, data, weights, vals, n, len, istd
    movaps m0,[valsq+r5]
    mulps m0,m7
    addps m0,[weightsq+r5]
+   movaps [valsq+r5],m0
+   add r5,16
+   sub nq,4
+   jnz .aloop
+   RET
+
+
+; parameters:
+;  const float *data,
+;  const float *weights,
+;  float *vals,
+;  const int n,
+;  const int len,
+;  const float *istd
+INIT_XMM
+cglobal dotProd_m32_m16_FMA3, 6, 7, 8, data, weights, vals, n, len, istd
+   PUSH valsq
+   PUSH nq
+   PUSH istdq ; r5
+   mov r5,dataq
+   mov r6d,lend
+.nloop:
+   mov dataq,r5
+   xorps m0,m0
+   xorps m1,m1
+   xorps m2,m2
+   xorps m3,m3
+   mov lend,r6d
+.lloop:
+   movaps m4,[dataq]
+   movaps m5,m4
+   movaps m6,m4
+   movaps m7,m4
+
+   vfmadd231ps m0, m4, [weightsq]
+   vfmadd231ps m1, m5, [weightsq + 16]
+   vfmadd231ps m2, m6, [weightsq + 32]
+   vfmadd231ps m3, m7, [weightsq + 48]
+
+   add dataq,16
+   add weightsq,64
+   sub lend,4
+   jnz .lloop
+   movaps m4,m0
+   movaps m5,m2
+   unpcklpd m0,m1
+   unpcklpd m2,m3
+   unpckhpd m4,m1
+   unpckhpd m5,m3
+   addps m0,m4
+   addps m2,m5
+   movaps m6,m0
+   shufps m0,m2,136
+   shufps m6,m2,221
+   addps m6,m0
+   movaps [valsq],m6
+   add valsq,16
+   sub nq,4
+   jnz .nloop
+   POP istdq
+   POP nq
+   POP valsq
+
+   movss m7,[istdq]
+   shufps m7,m7,0
+   xor r5,r5
+.aloop:
+   movaps m0,[valsq+r5]
+   vfmadd213ps m0, m7, [weightsq+r5]
+   movaps [valsq+r5],m0
+   add r5,16
+   sub nq,4
+   jnz .aloop
+   RET
+
+
+; parameters:
+;  const float *data,
+;  const float *weights,
+;  float *vals,
+;  const int n,
+;  const int len,
+;  const float *istd
+INIT_XMM
+cglobal dotProd_m32_m16_FMA4, 6, 7, 8, data, weights, vals, n, len, istd
+   PUSH valsq
+   PUSH nq
+   PUSH istdq ; r5
+   mov r5,dataq
+   mov r6d,lend
+.nloop:
+   mov dataq,r5
+   xorps m0,m0
+   xorps m1,m1
+   xorps m2,m2
+   xorps m3,m3
+   mov lend,r6d
+.lloop:
+   movaps m4,[dataq]
+   movaps m5,m4
+   movaps m6,m4
+   movaps m7,m4
+
+   vfmaddps m0, m4, [weightsq], m0
+   vfmaddps m1, m5, [weightsq + 16], m1
+   vfmaddps m2, m6, [weightsq + 32], m2
+   vfmaddps m3, m7, [weightsq + 48], m3
+
+   add dataq,16
+   add weightsq,64
+   sub lend,4
+   jnz .lloop
+   movaps m4,m0
+   movaps m5,m2
+   unpcklpd m0,m1
+   unpcklpd m2,m3
+   unpckhpd m4,m1
+   unpckhpd m5,m3
+   addps m0,m4
+   addps m2,m5
+   movaps m6,m0
+   shufps m0,m2,136
+   shufps m6,m2,221
+   addps m6,m0
+   movaps [valsq],m6
+   add valsq,16
+   sub nq,4
+   jnz .nloop
+   POP istdq
+   POP nq
+   POP valsq
+
+   movss m7,[istdq]
+   shufps m7,m7,0
+   xor r5,r5
+.aloop:
+   movaps m0,[valsq+r5]
+   vfmaddps m0, m0, m7, [weightsq+r5]
    movaps [valsq+r5],m0
    add r5,16
    sub nq,4
