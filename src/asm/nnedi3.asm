@@ -125,122 +125,33 @@ cglobal byte2word64_SSE2, 3, 3, 8, srcp, src_stride, dstp
 ; parameters:
 ; const float *datai, const float *weights, uint8_t *d
 INIT_XMM
-cglobal computeNetwork0new_SSE2, 3, 3, 8, datai, weights, d
-   mova m0,[dataiq]
-   mova m1,m0
-   mova m2,m0
-   mova m3,m0
+cglobal computeNetwork0new_SSE2, 3, 4, 8, datai, weights, d
+   pxor m0, m0
+   pxor m1, m1
+   pxor m2, m2
+   pxor m3, m3
 
-   pmaddwd m0,[weightsq]
-   pmaddwd m1,[weightsq+16]
-   pmaddwd m2,[weightsq+32]
-   pmaddwd m3,[weightsq+48]
+   xor r3, r3
+.loop:
+   mova m4, [dataiq + r3]
+   mova m5, m4
+   mova m6, m4
+   mova m7, m4
 
-   mova m4,[dataiq+16]
-   mova m5,m4
-   mova m6,m4
-   mova m7,m4
+   pmaddwd m4, [weightsq + r3 * 4]
+   pmaddwd m5, [weightsq + r3 * 4 + 16]
+   pmaddwd m6, [weightsq + r3 * 4 + 32]
+   pmaddwd m7, [weightsq + r3 * 4 + 48]
 
-   pmaddwd m4,[weightsq+64]
-   pmaddwd m5,[weightsq+80]
-   pmaddwd m6,[weightsq+96]
-   pmaddwd m7,[weightsq+112]
+   paddd m0, m4
+   paddd m1, m5
+   paddd m2, m6
+   paddd m3, m7
 
-   paddd m0,m4
-   paddd m1,m5
-   paddd m2,m6
-   paddd m3,m7
+   add r3, 16
+   cmp r3, 128
+   jl .loop
 
-   mova m4,[dataiq+32]
-   mova m5,m4
-   mova m6,m4
-   mova m7,m4
-
-   pmaddwd m4,[weightsq+128]
-   pmaddwd m5,[weightsq+144]
-   pmaddwd m6,[weightsq+160]
-   pmaddwd m7,[weightsq+176]
-
-   paddd m0,m4
-   paddd m1,m5
-   paddd m2,m6
-   paddd m3,m7
-
-   mova m4,[dataiq+48]
-   mova m5,m4
-   mova m6,m4
-   mova m7,m4
-   
-   pmaddwd m4,[weightsq+192]
-   pmaddwd m5,[weightsq+208]
-   pmaddwd m6,[weightsq+224]
-   pmaddwd m7,[weightsq+240]
-   
-   paddd m0,m4
-   paddd m1,m5
-   paddd m2,m6
-   paddd m3,m7
-   
-   mova m4,[dataiq+64]
-   mova m5,m4
-   mova m6,m4
-   mova m7,m4
-   
-   pmaddwd m4,[weightsq+256]
-   pmaddwd m5,[weightsq+272]
-   pmaddwd m6,[weightsq+288]
-   pmaddwd m7,[weightsq+304]
-   
-   paddd m0,m4
-   paddd m1,m5
-   paddd m2,m6
-   paddd m3,m7
-   
-   mova m4,[dataiq+80]
-   mova m5,m4
-   mova m6,m4
-   mova m7,m4
-   
-   pmaddwd m4,[weightsq+320]
-   pmaddwd m5,[weightsq+336]
-   pmaddwd m6,[weightsq+352]
-   pmaddwd m7,[weightsq+368]
-   
-   paddd m0,m4
-   paddd m1,m5
-   paddd m2,m6
-   paddd m3,m7
-   
-   mova m4,[dataiq+96]
-   mova m5,m4
-   mova m6,m4
-   mova m7,m4
-   
-   pmaddwd m4,[weightsq+384]
-   pmaddwd m5,[weightsq+400]
-   pmaddwd m6,[weightsq+416]
-   pmaddwd m7,[weightsq+432]
-   
-   paddd m0,m4
-   paddd m1,m5
-   paddd m2,m6
-   paddd m3,m7
-   
-   mova m4,[dataiq+112]
-   mova m5,m4
-   mova m6,m4
-   mova m7,m4
-   
-   pmaddwd m4,[weightsq+448]
-   pmaddwd m5,[weightsq+464]
-   pmaddwd m6,[weightsq+480]
-   pmaddwd m7,[weightsq+496]
-   
-   paddd m0,m4
-   paddd m1,m5
-   paddd m2,m6
-   paddd m3,m7
-   
    mova m4,m0
    mova m5,m2
    
@@ -558,45 +469,10 @@ cglobal dotProd_m32_m16_i16_SSE2, 6, 7, 8, data, weights, vals, n, len, istd
    paddd m1,m5
    paddd m2,m6
    paddd m3,m7
-   mova m4,[dataq+16] ; r0 - dataf
-   mova m5,m4
-   mova m6,m4
-   mova m7,m4
-   pmaddwd m4,[weightsq+64] ; r1 - weightsf
-   pmaddwd m5,[weightsq+80]
-   pmaddwd m6,[weightsq+96]
-   pmaddwd m7,[weightsq+112]
-   paddd m0,m4
-   paddd m1,m5
-   paddd m2,m6
-   paddd m3,m7
-   mova m4,[dataq+32] ; r0 - dataf
-   mova m5,m4
-   mova m6,m4
-   mova m7,m4
-   pmaddwd m4,[weightsq+128] ; r1 - weightsf
-   pmaddwd m5,[weightsq+144]
-   pmaddwd m6,[weightsq+160]
-   pmaddwd m7,[weightsq+176]
-   paddd m0,m4
-   paddd m1,m5
-   paddd m2,m6
-   paddd m3,m7
-   mova m4,[dataq+48] ; r0 - dataf
-   mova m5,m4
-   mova m6,m4
-   mova m7,m4
-   pmaddwd m4,[weightsq+192] ; r1 - weightsf
-   pmaddwd m5,[weightsq+208]
-   pmaddwd m6,[weightsq+224]
-   pmaddwd m7,[weightsq+240]
-   paddd m0,m4
-   paddd m1,m5
-   paddd m2,m6
-   paddd m3,m7
-   add dataq,64 ; r0 - dataf
-   add weightsq,256 ; r1 - weightsf
-   sub lenq,32 ; r4 - len
+
+   add dataq,16 ; r0 - dataf
+   add weightsq,64 ; r1 - weightsf
+   sub lenq,8 ; r4 - len
    jnz .lloop
    POP lenq ; r4 - len (original)
    mova m4,m0
@@ -621,32 +497,14 @@ cglobal dotProd_m32_m16_i16_SSE2, 6, 7, 8, data, weights, vals, n, len, istd
    pshufd m7,m7,0
    xor r5,r5 ; r5 - 0
 .aloop:
-   mova m0,[valsq+r5*4] ; r2 - vals (original)
-   mova m1,[valsq+r5*4+16]
-   mova m2,[valsq+r5*4+32]
-   mova m3,[valsq+r5*4+48]
+   mova m0,[valsq+r5] ; r2 - vals (original)
    cvtdq2ps m0,m0
-   cvtdq2ps m1,m1
-   cvtdq2ps m2,m2
-   cvtdq2ps m3,m3
-   mulps m0,[weightsq+r5*8] ; r1 - weightsf
-   mulps m1,[weightsq+r5*8+32]
-   mulps m2,[weightsq+r5*8+64]
-   mulps m3,[weightsq+r5*8+96]
+   mulps m0,[weightsq+r5*2] ; r1 - weightsf
    mulps m0,m7
-   mulps m1,m7
-   mulps m2,m7
-   mulps m3,m7
-   addps m0,[weightsq+r5*8+16] ; r1 - weightsf
-   addps m1,[weightsq+r5*8+48]
-   addps m2,[weightsq+r5*8+80]
-   addps m3,[weightsq+r5*8+112]
-   movaps [valsq+r5*4],m0 ; r2 - vals
-   movaps [valsq+r5*4+16],m1
-   movaps [valsq+r5*4+32],m2
-   movaps [valsq+r5*4+48],m3
+   addps m0,[weightsq+r5*2+16] ; r1 - weightsf
+   movaps [valsq+r5],m0 ; r2 - vals
    add r5,16
-   sub nq,16 ; r3 - n
+   sub nq,4 ; r3 - n
    jnz .aloop
    RET
 
@@ -660,35 +518,15 @@ cglobal e0_m16_SSE2, 2, 2, 4
    ;mov r1,[esp+8]
 .eloop16:
    movaps m0,[r0]
-   movaps m1,[r0+16]
-   movaps m2,[r0+32]
-   movaps m3,[r0+48]
    minps m0,[exp_hi]
-   minps m1,[exp_hi]
-   minps m2,[exp_hi]
-   minps m3,[exp_hi]
    maxps m0,[exp_lo]
-   maxps m1,[exp_lo]
-   maxps m2,[exp_lo]
-   maxps m3,[exp_lo]
    mulps m0,[e0_mult]
-   mulps m1,[e0_mult]
-   mulps m2,[e0_mult]
-   mulps m3,[e0_mult]
    addps m0,[e0_bias]
-   addps m1,[e0_bias]
-   addps m2,[e0_bias]
-   addps m3,[e0_bias]
    cvtps2dq m0,m0
-   cvtps2dq m1,m1
-   cvtps2dq m2,m2
-   cvtps2dq m3,m3
    movaps [r0],m0
-   movaps [r0+16],m1
-   movaps [r0+32],m2
-   movaps [r0+48],m3
-   add r0,64
-   sub r1,16
+
+   add r0,16
+   sub r1,4
    jnz .eloop16
    RET
 
@@ -698,151 +536,38 @@ cglobal e0_m16_SSE2, 2, 2, 4
 ;  const float *weights,
 ;  uint8_t *d
 INIT_XMM
-cglobal computeNetwork0_SSE2, 3, 4, 8, input, weights, d
+cglobal computeNetwork0_SSE2, 3, 5, 8, input, weights, d
    ;//    dotProd48_m4_SSE(input,weights,temp,4);
    ;mov r0,[esp+4]
    ;mov r1,[esp+8]
    mov r3,1
-   movaps m0,[inputq]
-   movaps m1,m0
-   movaps m2,m0
-   movaps m3,m0
-   mulps m0,[weightsq]
-   mulps m1,[weightsq+16]
-   mulps m2,[weightsq+32]
-   mulps m3,[weightsq+48]
-   movaps m4,[inputq+16]
-   movaps m5,m4
-   movaps m6,m4
-   movaps m7,m4
-   mulps m4,[weightsq+64]
-   mulps m5,[weightsq+80]
-   mulps m6,[weightsq+96]
-   mulps m7,[weightsq+112]
-   addps m0,m4
-   addps m1,m5
-   addps m2,m6
-   addps m3,m7
-   movaps m4,[inputq+32]
-   movaps m5,m4
-   movaps m6,m4
-   movaps m7,m4
-   mulps m4,[weightsq+128]
-   mulps m5,[weightsq+144]
-   mulps m6,[weightsq+160]
-   mulps m7,[weightsq+176]
-   addps m0,m4
-   addps m1,m5
-   addps m2,m6
-   addps m3,m7
-   movaps m4,[inputq+48]
-   movaps m5,m4
-   movaps m6,m4
-   movaps m7,m4
-   mulps m4,[weightsq+192]
-   mulps m5,[weightsq+208]
-   mulps m6,[weightsq+224]
-   mulps m7,[weightsq+240]
-   addps m0,m4
-   addps m1,m5
-   addps m2,m6
-   addps m3,m7
-   movaps m4,[inputq+64]
-   movaps m5,m4
-   movaps m6,m4
-   movaps m7,m4
-   mulps m4,[weightsq+256]
-   mulps m5,[weightsq+272]
-   mulps m6,[weightsq+288]
-   mulps m7,[weightsq+304]
-   addps m0,m4
-   addps m1,m5
-   addps m2,m6
-   addps m3,m7
-   movaps m4,[inputq+80]
-   movaps m5,m4
-   movaps m6,m4
-   movaps m7,m4
-   mulps m4,[weightsq+320]
-   mulps m5,[weightsq+336]
-   mulps m6,[weightsq+352]
-   mulps m7,[weightsq+368]
-   addps m0,m4
-   addps m1,m5
-   addps m2,m6
-   addps m3,m7
-   movaps m4,[inputq+96]
-   movaps m5,m4
-   movaps m6,m4
-   movaps m7,m4
-   mulps m4,[weightsq+384]
-   mulps m5,[weightsq+400]
-   mulps m6,[weightsq+416]
-   mulps m7,[weightsq+432]
-   addps m0,m4
-   addps m1,m5
-   addps m2,m6
-   addps m3,m7
-   movaps m4,[inputq+112]
-   movaps m5,m4
-   movaps m6,m4
-   movaps m7,m4
-   mulps m4,[weightsq+448]
-   mulps m5,[weightsq+464]
-   mulps m6,[weightsq+480]
-   mulps m7,[weightsq+496]
-   addps m0,m4
-   addps m1,m5
-   addps m2,m6
-   addps m3,m7
-   movaps m4,[inputq+128]
-   movaps m5,m4
-   movaps m6,m4
-   movaps m7,m4
-   mulps m4,[weightsq+512]
-   mulps m5,[weightsq+528]
-   mulps m6,[weightsq+544]
-   mulps m7,[weightsq+560]
-   addps m0,m4
-   addps m1,m5
-   addps m2,m6
-   addps m3,m7
-   movaps m4,[inputq+144]
-   movaps m5,m4
-   movaps m6,m4
-   movaps m7,m4
-   mulps m4,[weightsq+576]
-   mulps m5,[weightsq+592]
-   mulps m6,[weightsq+608]
-   mulps m7,[weightsq+624]
-   addps m0,m4
-   addps m1,m5
-   addps m2,m6
-   addps m3,m7
-   movaps m4,[inputq+160]
-   movaps m5,m4
-   movaps m6,m4
-   movaps m7,m4
-   mulps m4,[weightsq+640]
-   mulps m5,[weightsq+656]
-   mulps m6,[weightsq+672]
-   mulps m7,[weightsq+688]
-   addps m0,m4
-   addps m1,m5
-   addps m2,m6
-   addps m3,m7
-   movaps m4,[inputq+176]
-   movaps m5,m4
-   movaps m6,m4
-   movaps m7,m4
-   mulps m4,[weightsq+704]
-   mulps m5,[weightsq+720]
-   mulps m6,[weightsq+736]
-   mulps m7,[weightsq+752]
-   addps m0,m4
-   addps m1,m5
-   addps m2,m6
-   addps m3,m7
+
+   xorps m0, m0
+   xorps m1, m1
+   xorps m2, m2
+   xorps m3, m3
+
+   xor r4, r4
+.loop:
+   movaps m4, [inputq + r4]
+   movaps m5, m4
+   movaps m6, m4
+   movaps m7, m4
+
+   mulps m4, [weightsq + r4 * 4]
+   mulps m5, [weightsq + r4 * 4 + 16]
+   mulps m6, [weightsq + r4 * 4 + 32]
+   mulps m7, [weightsq + r4 * 4 + 48]
+
+   addps m0, m4
+   addps m1, m5
+   addps m2, m6
+   addps m3, m7
+
+   add r4, 16
+   cmp r4, 192
+   jl .loop
+
    movaps m4,m0
    movaps m5,m2
    unpcklpd m0,m1
@@ -993,76 +718,33 @@ cglobal byte2float48_SSE2, 3, 3, 7, srcp, src_pitch, dstp
 ;  const float *weightsf,
 ;  uint8_t *d
 INIT_XMM
-cglobal computeNetwork0_i16_SSE2, 3, 4, 8, input, weights, d
+cglobal computeNetwork0_i16_SSE2, 3, 5, 8, input, weights, d
    mov r3,1
-   movdqa m0,[inputq]
-   movdqa m1,m0
-   movdqa m2,m0
-   movdqa m3,m0
-   pmaddwd m0,[weightsq]
-   pmaddwd m1,[weightsq+16]
-   pmaddwd m2,[weightsq+32]
-   pmaddwd m3,[weightsq+48]
-   movdqa m4,[inputq+16]
-   movdqa m5,m4
-   movdqa m6,m4
-   movdqa m7,m4
-   pmaddwd m4,[weightsq+64]
-   pmaddwd m5,[weightsq+80]
-   pmaddwd m6,[weightsq+96]
-   pmaddwd m7,[weightsq+112]
-   paddd m0,m4
-   paddd m1,m5
-   paddd m2,m6
-   paddd m3,m7
-   movdqa m4,[inputq+32]
-   movdqa m5,m4
-   movdqa m6,m4
-   movdqa m7,m4
-   pmaddwd m4,[weightsq+128]
-   pmaddwd m5,[weightsq+144]
-   pmaddwd m6,[weightsq+160]
-   pmaddwd m7,[weightsq+176]
-   paddd m0,m4
-   paddd m1,m5
-   paddd m2,m6
-   paddd m3,m7
-   movdqa m4,[inputq+48]
-   movdqa m5,m4
-   movdqa m6,m4
-   movdqa m7,m4
-   pmaddwd m4,[weightsq+192]
-   pmaddwd m5,[weightsq+208]
-   pmaddwd m6,[weightsq+224]
-   pmaddwd m7,[weightsq+240]
-   paddd m0,m4
-   paddd m1,m5
-   paddd m2,m6
-   paddd m3,m7
-   movdqa m4,[inputq+64]
-   movdqa m5,m4
-   movdqa m6,m4
-   movdqa m7,m4
-   pmaddwd m4,[weightsq+256]
-   pmaddwd m5,[weightsq+272]
-   pmaddwd m6,[weightsq+288]
-   pmaddwd m7,[weightsq+304]
-   paddd m0,m4
-   paddd m1,m5
-   paddd m2,m6
-   paddd m3,m7
-   movdqa m4,[inputq+80]
-   movdqa m5,m4
-   movdqa m6,m4
-   movdqa m7,m4
-   pmaddwd m4,[weightsq+320]
-   pmaddwd m5,[weightsq+336]
-   pmaddwd m6,[weightsq+352]
-   pmaddwd m7,[weightsq+368]
-   paddd m0,m4
-   paddd m1,m5
-   paddd m2,m6
-   paddd m3,m7
+
+   pxor m0, m0
+   pxor m1, m1
+   pxor m2, m2
+   pxor m3, m3
+
+   xor r4, r4
+.loop:
+   movdqa m4, [inputq + r4]
+   movdqa m5, m4
+   movdqa m6, m4
+   movdqa m7, m4
+   pmaddwd m4, [weightsq + r4 * 4]
+   pmaddwd m5, [weightsq + r4 * 4 + 16]
+   pmaddwd m6, [weightsq + r4 * 4 + 32]
+   pmaddwd m7, [weightsq + r4 * 4 + 48]
+   paddd m0, m4
+   paddd m1, m5
+   paddd m2, m6
+   paddd m3, m7
+
+   add r4, 16
+   cmp r4, 96
+   jl .loop
+
    movdqa m4,m0
    movdqa m5,m2
    punpcklqdq m0,m1
@@ -1373,93 +1055,10 @@ cglobal dotProd_m32_m16_SSE2, 6, 7, 8, data, weights, vals, n, len, istd
    addps m1,m5
    addps m2,m6
    addps m3,m7
-   movaps m4,[dataq+16]
-   movaps m5,m4
-   movaps m6,m4
-   movaps m7,m4
-   mulps m4,[weightsq+64]
-   mulps m5,[weightsq+80]
-   mulps m6,[weightsq+96]
-   mulps m7,[weightsq+112]
-   addps m0,m4
-   addps m1,m5
-   addps m2,m6
-   addps m3,m7
-   movaps m4,[dataq+32]
-   movaps m5,m4
-   movaps m6,m4
-   movaps m7,m4
-   mulps m4,[weightsq+128]
-   mulps m5,[weightsq+144]
-   mulps m6,[weightsq+160]
-   mulps m7,[weightsq+176]
-   addps m0,m4
-   addps m1,m5
-   addps m2,m6
-   addps m3,m7
-   movaps m4,[dataq+48]
-   movaps m5,m4
-   movaps m6,m4
-   movaps m7,m4
-   mulps m4,[weightsq+192]
-   mulps m5,[weightsq+208]
-   mulps m6,[weightsq+224]
-   mulps m7,[weightsq+240]
-   addps m0,m4
-   addps m1,m5
-   addps m2,m6
-   addps m3,m7
-   movaps m4,[dataq+64]
-   movaps m5,m4
-   movaps m6,m4
-   movaps m7,m4
-   mulps m4,[weightsq+256]
-   mulps m5,[weightsq+272]
-   mulps m6,[weightsq+288]
-   mulps m7,[weightsq+304]
-   addps m0,m4
-   addps m1,m5
-   addps m2,m6
-   addps m3,m7
-   movaps m4,[dataq+80]
-   movaps m5,m4
-   movaps m6,m4
-   movaps m7,m4
-   mulps m4,[weightsq+320]
-   mulps m5,[weightsq+336]
-   mulps m6,[weightsq+352]
-   mulps m7,[weightsq+368]
-   addps m0,m4
-   addps m1,m5
-   addps m2,m6
-   addps m3,m7
-   movaps m4,[dataq+96]
-   movaps m5,m4
-   movaps m6,m4
-   movaps m7,m4
-   mulps m4,[weightsq+384]
-   mulps m5,[weightsq+400]
-   mulps m6,[weightsq+416]
-   mulps m7,[weightsq+432]
-   addps m0,m4
-   addps m1,m5
-   addps m2,m6
-   addps m3,m7
-   movaps m4,[dataq+112]
-   movaps m5,m4
-   movaps m6,m4
-   movaps m7,m4
-   mulps m4,[weightsq+448]
-   mulps m5,[weightsq+464]
-   mulps m6,[weightsq+480]
-   mulps m7,[weightsq+496]
-   addps m0,m4
-   addps m1,m5
-   addps m2,m6
-   addps m3,m7
-   add dataq,128
-   add weightsq,512
-   sub lend,32
+
+   add dataq,16
+   add weightsq,64
+   sub lend,4
    jnz .lloop
    movaps m4,m0
    movaps m5,m2
@@ -1485,24 +1084,12 @@ cglobal dotProd_m32_m16_SSE2, 6, 7, 8, data, weights, vals, n, len, istd
    shufps m7,m7,0
    xor r5,r5
 .aloop:
-   movaps m0,[valsq+r5*4]
-   movaps m1,[valsq+r5*4+16]
-   movaps m2,[valsq+r5*4+32]
-   movaps m3,[valsq+r5*4+48]
+   movaps m0,[valsq+r5]
    mulps m0,m7
-   mulps m1,m7
-   mulps m2,m7
-   mulps m3,m7
-   addps m0,[weightsq+r5*4]
-   addps m1,[weightsq+r5*4+16]
-   addps m2,[weightsq+r5*4+32]
-   addps m3,[weightsq+r5*4+48]
-   movaps [valsq+r5*4],m0
-   movaps [valsq+r5*4+16],m1
-   movaps [valsq+r5*4+32],m2
-   movaps [valsq+r5*4+48],m3
+   addps m0,[weightsq+r5]
+   movaps [valsq+r5],m0
    add r5,16
-   sub nq,16
+   sub nq,4
    jnz .aloop
    RET
 
@@ -1541,69 +1128,10 @@ cglobal dotProd_m48_m16_i16_SSE2, 6, 7, 8, data, weights, vals, n, len, istd
    paddd m1,m5
    paddd m2,m6
    paddd m3,m7
-   movdqa m4,[dataq+16]
-   movdqa m5,m4
-   movdqa m6,m4
-   movdqa m7,m4
-   pmaddwd m4,[weightsq+64]
-   pmaddwd m5,[weightsq+80]
-   pmaddwd m6,[weightsq+96]
-   pmaddwd m7,[weightsq+112]
-   paddd m0,m4
-   paddd m1,m5
-   paddd m2,m6
-   paddd m3,m7
-   movdqa m4,[dataq+32]
-   movdqa m5,m4
-   movdqa m6,m4
-   movdqa m7,m4
-   pmaddwd m4,[weightsq+128]
-   pmaddwd m5,[weightsq+144]
-   pmaddwd m6,[weightsq+160]
-   pmaddwd m7,[weightsq+176]
-   paddd m0,m4
-   paddd m1,m5
-   paddd m2,m6
-   paddd m3,m7
-   movdqa m4,[dataq+48]
-   movdqa m5,m4
-   movdqa m6,m4
-   movdqa m7,m4
-   pmaddwd m4,[weightsq+192]
-   pmaddwd m5,[weightsq+208]
-   pmaddwd m6,[weightsq+224]
-   pmaddwd m7,[weightsq+240]
-   paddd m0,m4
-   paddd m1,m5
-   paddd m2,m6
-   paddd m3,m7
-   movdqa m4,[dataq+64]
-   movdqa m5,m4
-   movdqa m6,m4
-   movdqa m7,m4
-   pmaddwd m4,[weightsq+256]
-   pmaddwd m5,[weightsq+272]
-   pmaddwd m6,[weightsq+288]
-   pmaddwd m7,[weightsq+304]
-   paddd m0,m4
-   paddd m1,m5
-   paddd m2,m6
-   paddd m3,m7
-   movdqa m4,[dataq+80]
-   movdqa m5,m4
-   movdqa m6,m4
-   movdqa m7,m4
-   pmaddwd m4,[weightsq+320]
-   pmaddwd m5,[weightsq+336]
-   pmaddwd m6,[weightsq+352]
-   pmaddwd m7,[weightsq+368]
-   paddd m0,m4
-   paddd m1,m5
-   paddd m2,m6
-   paddd m3,m7
-   add dataq,96
-   add weightsq,384
-   sub lend,48
+
+   add dataq,16
+   add weightsq,64
+   sub lend,8
    jnz .lloop
    movdqa m4,m0
    movdqa m5,m2
@@ -1629,32 +1157,14 @@ cglobal dotProd_m48_m16_i16_SSE2, 6, 7, 8, data, weights, vals, n, len, istd
    pshufd m7,m7,0
    xor r5,r5
 .aloop:
-   movdqa m0,[valsq+r5*4]
-   movdqa m1,[valsq+r5*4+16]
-   movdqa m2,[valsq+r5*4+32]
-   movdqa m3,[valsq+r5*4+48]
+   movdqa m0,[valsq+r5]
    cvtdq2ps m0,m0
-   cvtdq2ps m1,m1
-   cvtdq2ps m2,m2
-   cvtdq2ps m3,m3
-   mulps m0,[weightsq+r5*8]
-   mulps m1,[weightsq+r5*8+32]
-   mulps m2,[weightsq+r5*8+64]
-   mulps m3,[weightsq+r5*8+96]
+   mulps m0,[weightsq+r5*2]
    mulps m0,m7
-   mulps m1,m7
-   mulps m2,m7
-   mulps m3,m7
-   addps m0,[weightsq+r5*8+16]
-   addps m1,[weightsq+r5*8+48]
-   addps m2,[weightsq+r5*8+80]
-   addps m3,[weightsq+r5*8+112]
-   movaps [valsq+r5*4],m0
-   movaps [valsq+r5*4+16],m1
-   movaps [valsq+r5*4+32],m2
-   movaps [valsq+r5*4+48],m3
+   addps m0,[weightsq+r5*2+16]
+   movaps [valsq+r5],m0
    add r5,16
-   sub nq,16
+   sub nq,4
    jnz .aloop
    RET
 
@@ -1693,141 +1203,10 @@ cglobal dotProd_m48_m16_SSE2, 6, 7, 8, data, weights, vals, n, len, istd
    addps m1,m5
    addps m2,m6
    addps m3,m7
-   movaps m4,[dataq+16]
-   movaps m5,m4
-   movaps m6,m4
-   movaps m7,m4
-   mulps m4,[weightsq+64]
-   mulps m5,[weightsq+80]
-   mulps m6,[weightsq+96]
-   mulps m7,[weightsq+112]
-   addps m0,m4
-   addps m1,m5
-   addps m2,m6
-   addps m3,m7
-   movaps m4,[dataq+32]
-   movaps m5,m4
-   movaps m6,m4
-   movaps m7,m4
-   mulps m4,[weightsq+128]
-   mulps m5,[weightsq+144]
-   mulps m6,[weightsq+160]
-   mulps m7,[weightsq+176]
-   addps m0,m4
-   addps m1,m5
-   addps m2,m6
-   addps m3,m7
-   movaps m4,[dataq+48]
-   movaps m5,m4
-   movaps m6,m4
-   movaps m7,m4
-   mulps m4,[weightsq+192]
-   mulps m5,[weightsq+208]
-   mulps m6,[weightsq+224]
-   mulps m7,[weightsq+240]
-   addps m0,m4
-   addps m1,m5
-   addps m2,m6
-   addps m3,m7
-   movaps m4,[dataq+64]
-   movaps m5,m4
-   movaps m6,m4
-   movaps m7,m4
-   mulps m4,[weightsq+256]
-   mulps m5,[weightsq+272]
-   mulps m6,[weightsq+288]
-   mulps m7,[weightsq+304]
-   addps m0,m4
-   addps m1,m5
-   addps m2,m6
-   addps m3,m7
-   movaps m4,[dataq+80]
-   movaps m5,m4
-   movaps m6,m4
-   movaps m7,m4
-   mulps m4,[weightsq+320]
-   mulps m5,[weightsq+336]
-   mulps m6,[weightsq+352]
-   mulps m7,[weightsq+368]
-   addps m0,m4
-   addps m1,m5
-   addps m2,m6
-   addps m3,m7
-   movaps m4,[dataq+96]
-   movaps m5,m4
-   movaps m6,m4
-   movaps m7,m4
-   mulps m4,[weightsq+384]
-   mulps m5,[weightsq+400]
-   mulps m6,[weightsq+416]
-   mulps m7,[weightsq+432]
-   addps m0,m4
-   addps m1,m5
-   addps m2,m6
-   addps m3,m7
-   movaps m4,[dataq+112]
-   movaps m5,m4
-   movaps m6,m4
-   movaps m7,m4
-   mulps m4,[weightsq+448]
-   mulps m5,[weightsq+464]
-   mulps m6,[weightsq+480]
-   mulps m7,[weightsq+496]
-   addps m0,m4
-   addps m1,m5
-   addps m2,m6
-   addps m3,m7
-   movaps m4,[dataq+128]
-   movaps m5,m4
-   movaps m6,m4
-   movaps m7,m4
-   mulps m4,[weightsq+512]
-   mulps m5,[weightsq+528]
-   mulps m6,[weightsq+544]
-   mulps m7,[weightsq+560]
-   addps m0,m4
-   addps m1,m5
-   addps m2,m6
-   addps m3,m7
-   movaps m4,[dataq+144]
-   movaps m5,m4
-   movaps m6,m4
-   movaps m7,m4
-   mulps m4,[weightsq+576]
-   mulps m5,[weightsq+592]
-   mulps m6,[weightsq+608]
-   mulps m7,[weightsq+624]
-   addps m0,m4
-   addps m1,m5
-   addps m2,m6
-   addps m3,m7
-   movaps m4,[dataq+160]
-   movaps m5,m4
-   movaps m6,m4
-   movaps m7,m4
-   mulps m4,[weightsq+640]
-   mulps m5,[weightsq+656]
-   mulps m6,[weightsq+672]
-   mulps m7,[weightsq+688]
-   addps m0,m4
-   addps m1,m5
-   addps m2,m6
-   addps m3,m7
-   movaps m4,[dataq+176]
-   movaps m5,m4
-   movaps m6,m4
-   movaps m7,m4
-   mulps m4,[weightsq+704]
-   mulps m5,[weightsq+720]
-   mulps m6,[weightsq+736]
-   mulps m7,[weightsq+752]
-   addps m0,m4
-   addps m1,m5
-   addps m2,m6
-   addps m3,m7
-   add dataq,192
-   add weightsq,768
-   sub lend,48
+
+   add dataq,16
+   add weightsq,64
+   sub lend,4
    jnz .lloop
    movaps m4,m0
    movaps m5,m2
@@ -1853,24 +1232,12 @@ cglobal dotProd_m48_m16_SSE2, 6, 7, 8, data, weights, vals, n, len, istd
    shufps m7,m7,0
    xor r5,r5
 .aloop:
-   movaps m0,[valsq+r5*4]
-   movaps m1,[valsq+r5*4+16]
-   movaps m2,[valsq+r5*4+32]
-   movaps m3,[valsq+r5*4+48]
+   movaps m0,[valsq+r5]
    mulps m0,m7
-   mulps m1,m7
-   mulps m2,m7
-   mulps m3,m7
-   addps m0,[weightsq+r5*4]
-   addps m1,[weightsq+r5*4+16]
-   addps m2,[weightsq+r5*4+32]
-   addps m3,[weightsq+r5*4+48]
-   movaps [valsq+r5*4],m0
-   movaps [valsq+r5*4+16],m1
-   movaps [valsq+r5*4+32],m2
-   movaps [valsq+r5*4+48],m3
+   addps m0,[weightsq+r5]
+   movaps [valsq+r5],m0
    add r5,16
-   sub nq,16
+   sub nq,4
    jnz .aloop
    RET
 
