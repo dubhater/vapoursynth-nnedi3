@@ -34,8 +34,8 @@
 
 
 // Functions implemented in nnedi3.asm
-extern void nnedi3_uc2s48_SSE2(const uint8_t *t, const int pitch, float *pf);
-extern void nnedi3_uc2s64_SSE2(const uint8_t *t, const int pitch, float *p);
+extern void nnedi3_byte2word48_SSE2(const uint8_t *t, const int pitch, float *pf);
+extern void nnedi3_byte2word64_SSE2(const uint8_t *t, const int pitch, float *p);
 extern void nnedi3_computeNetwork0new_SSE2(const float *datai, const float *weights, uint8_t *d);
 extern int32_t nnedi3_processLine0_SSE2(const uint8_t *tempu, int width, uint8_t *dstp, const uint8_t *src3p, const int src_pitch);
 extern void nnedi3_weightedAvgElliottMul5_m16_SSE2(const float *w, const int n, float *mstd);
@@ -44,7 +44,7 @@ extern void nnedi3_dotProd_m32_m16_i16_SSE2(const float *dataf, const float *wei
 extern void nnedi3_e0_m16_SSE2(float *s, const int n);
 extern void nnedi3_castScale_SSE(const float *val, const float *scale, uint8_t *dstp);
 extern void nnedi3_computeNetwork0_SSE2(const float *input, const float *weights, uint8_t *d);
-extern void nnedi3_uc2f48_SSE2(const uint8_t *t, const int pitch, float *p);
+extern void nnedi3_byte2float48_SSE2(const uint8_t *t, const int pitch, float *p);
 extern void nnedi3_computeNetwork0_i16_SSE2(const float *inputf, const float *weightsf, uint8_t *d);
 extern void nnedi3_e1_m16_SSE2(float *s, const int n);
 extern void nnedi3_e2_m16_SSE2(float *s, const int n);
@@ -103,7 +103,7 @@ typedef struct {
     void (*evalFunc_1)(void **, FrameData *);
 
     // Functions used in evalFunc_0
-    void (*uc2s)(const uint8_t*, const int, float*);
+    void (*readPixels)(const uint8_t*, const int, float*);
     void (*computeNetwork0)(const float*, const float*, uint8_t *);
     int32_t (*processLine0)(const uint8_t*, int, uint8_t*, const uint8_t*, const int, const int);
 
@@ -311,7 +311,7 @@ void computeNetwork0_i16_C(const float *inputf, const float *weightsf, uint8_t *
 }
 
 
-void uc2f48_C(const uint8_t *t, const int pitch, float *p)
+void byte2float48_C(const uint8_t *t, const int pitch, float *p)
 {
     for (int y=0; y<4; ++y)
         for (int x=0; x<12; ++x)
@@ -319,8 +319,7 @@ void uc2f48_C(const uint8_t *t, const int pitch, float *p)
 }
 
 
-// Name's wrong now. The input is no longer unsigned char.
-void uc2f48_uint16_C(const uint8_t *t8, const int pitch, float *p)
+void word2float48_C(const uint8_t *t8, const int pitch, float *p)
 {
     const uint16_t *t = (const uint16_t *)t8;
 
@@ -330,7 +329,7 @@ void uc2f48_uint16_C(const uint8_t *t8, const int pitch, float *p)
 }
 
 
-void uc2s48_C(const uint8_t *t, const int pitch, float *pf)
+void byte2word48_C(const uint8_t *t, const int pitch, float *pf)
 {
     int16_t *p = (int16_t*)pf;
     for (int y=0; y<4; ++y)
@@ -405,7 +404,7 @@ int32_t processLine0_uint16_C(const uint8_t *tempu, int width, uint8_t *dstp8,
 }
 
 // new prescreener functions
-void uc2s64_C(const uint8_t *t, const int pitch, float *p)
+void byte2word64_C(const uint8_t *t, const int pitch, float *p)
 {
     int16_t *ps = (int16_t*)p;
     for (int y=0; y<4; ++y)
@@ -487,7 +486,7 @@ void evalFunc_0(void **instanceData, FrameData *frameData)
             {
                 for (int x=32; x<width-32; ++x)
                 {
-                    d->uc2s(src3p+x-5,src_stride,input);
+                    d->readPixels(src3p+x-5,src_stride,input);
                     d->computeNetwork0(input,weights0,tempu+x);
                 }
                 lcount[y] += d->processLine0(tempu+32,width-64,dstp+32,src3p+32,src_stride, 42); // 42 is the answer
@@ -501,7 +500,7 @@ void evalFunc_0(void **instanceData, FrameData *frameData)
             {
                 for (int x=32; x<width-32; x+=4)
                 {
-                    d->uc2s(src3p+x-6,src_stride,input);
+                    d->readPixels(src3p+x-6,src_stride,input);
                     d->computeNetwork0(input,weights0,tempu+x);
                 }
                 lcount[y] += d->processLine0(tempu+32,width-64,dstp+32,src3p+32,src_stride, 42);
@@ -566,7 +565,7 @@ void evalFunc_0_uint16(void **instanceData, FrameData *frameData)
             {
                 for (int x=32; x<width-32; ++x)
                 {
-                    d->uc2s((const uint8_t *)(src3p16 + x - 5), src_stride, input);
+                    d->readPixels((const uint8_t *)(src3p16 + x - 5), src_stride, input);
                     d->computeNetwork0(input, weights0, tempu+x);
                 }
                 lcount[y] += d->processLine0(tempu+32, width-64, (uint8_t *)(dstp16 + 32), (const uint8_t *)(src3p16 + 32), src_stride, d->max_value);
@@ -917,28 +916,28 @@ static void selectFunctions(nnedi3Data *d) {
     if (d->pscrn < 2) { // original prescreener
         if (d->fapprox & 1) { // int16 dot products
             if (d->opt == 1) {
-                d->uc2s = uc2s48_C;
+                d->readPixels = byte2word48_C;
                 d->computeNetwork0 = computeNetwork0_i16_C;
             } else {
-                d->uc2s = nnedi3_uc2s48_SSE2;
+                d->readPixels = nnedi3_byte2word48_SSE2;
                 d->computeNetwork0 = nnedi3_computeNetwork0_i16_SSE2;
             }
         } else {
             if (d->opt == 1) {
-                d->uc2s = uc2f48_C;
+                d->readPixels = byte2float48_C;
                 d->computeNetwork0 = computeNetwork0_C;
             } else {
-                d->uc2s = nnedi3_uc2f48_SSE2;
+                d->readPixels = nnedi3_byte2float48_SSE2;
                 d->computeNetwork0 = nnedi3_computeNetwork0_SSE2;
             }
         }
     } else { // new prescreener
         // only int16 dot products
         if (d->opt == 1) {
-            d->uc2s = uc2s64_C;
+            d->readPixels = byte2word64_C;
             d->computeNetwork0 = computeNetwork0new_C;
         } else {
-            d->uc2s = nnedi3_uc2s64_SSE2;
+            d->readPixels = nnedi3_byte2word64_SSE2;
             d->computeNetwork0 = nnedi3_computeNetwork0new_SSE2;
         }
     }
@@ -995,7 +994,7 @@ static void selectFunctions_uint16(nnedi3Data *d) {
         // evalFunc_0
         d->processLine0 = processLine0_uint16_C;
 
-        d->uc2s = uc2f48_uint16_C;
+        d->readPixels = word2float48_C;
         d->computeNetwork0 = computeNetwork0_C;
 
         // evalFunc_1
@@ -1015,7 +1014,7 @@ static void selectFunctions_uint16(nnedi3Data *d) {
         // evalFunc_0
         d->processLine0 = processLine0_uint16_C; // C works too
 
-        d->uc2s = uc2f48_uint16_C; // C works too
+        d->readPixels = word2float48_C; // C works too
         d->computeNetwork0 = nnedi3_computeNetwork0_SSE2;
 
         // evalFunc_1

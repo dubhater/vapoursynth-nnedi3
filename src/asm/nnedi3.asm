@@ -53,7 +53,7 @@ SECTION_TEXT
 ; r1 - pitch
 ; r2 - pf
 INIT_XMM
-cglobal uc2s48_SSE2, 3, 4, 8
+cglobal byte2word48_SSE2, 3, 4, 8
    lea r3, [r0 + r1 * 4]
    movq m0, [r0]
    movd m1, [r0 + 8]
@@ -86,7 +86,7 @@ cglobal uc2s48_SSE2, 3, 4, 8
    RET
 
 INIT_XMM
-cglobal uc2s64_SSE2, 3, 3, 8
+cglobal byte2word64_SSE2, 3, 3, 8
    pxor m7, m7
    
    movq m0, [r0]
@@ -950,7 +950,7 @@ cglobal computeNetwork0_SSE2, 3, 4, 8
 ;  const int pitch,
 ;  float *p
 INIT_XMM
-cglobal uc2f48_SSE2, 3, 3, 7
+cglobal byte2float48_SSE2, 3, 3, 7
    pxor m6,m6
    movq m0,[r0]
    movd m4,[r0+8]
