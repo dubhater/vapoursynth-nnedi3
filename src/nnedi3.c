@@ -34,6 +34,7 @@
 
 
 // Functions implemented in nnedi3.asm
+extern void nnedi3_word2float48_SSE2(const uint8_t *t, const int pitch, float *pf);
 extern void nnedi3_byte2word48_SSE2(const uint8_t *t, const int pitch, float *pf);
 extern void nnedi3_byte2word64_SSE2(const uint8_t *t, const int pitch, float *p);
 extern void nnedi3_computeNetwork0new_SSE2(const float *datai, const float *weights, uint8_t *d);
@@ -1032,7 +1033,7 @@ static void selectFunctions_uint16(nnedi3Data *d) {
         // evalFunc_0
         d->processLine0 = processLine0_uint16_C; // C works too
 
-        d->readPixels = word2float48_C; // C works too
+        d->readPixels = nnedi3_word2float48_SSE2; // C works too
         d->computeNetwork0 = nnedi3_computeNetwork0_SSE2;
         if (d->opt == 3)
             d->computeNetwork0 = nnedi3_computeNetwork0_FMA3;

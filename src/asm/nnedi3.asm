@@ -51,6 +51,43 @@ SECTION_TEXT
 ; r1 - pitch
 ; r2 - pf
 INIT_XMM
+cglobal word2float48_SSE2, 3, 4, 4, srcp, src_pitch, dstp
+    pxor m0, m0
+
+    shl src_pitchq, 2 ; stride is halved
+
+    mov r3, 4
+.loop:
+    movq m1, [srcpq]
+    movq m2, [srcpq + 8]
+    movq m3, [srcpq + 16]
+
+    punpcklwd m1, m0
+    punpcklwd m2, m0
+    punpcklwd m3, m0
+
+    cvtdq2ps m1, m1
+    cvtdq2ps m2, m2
+    cvtdq2ps m3, m3
+
+    movaps [dstpq], m1
+    movaps [dstpq + 16], m2
+    movaps [dstpq + 32], m3
+
+    add dstpq, 48
+    add srcpq, src_pitchq
+    sub r3, 1
+    jnz .loop
+
+    RET
+
+
+; parameters:
+; const uint8_t *t, const int pitch, float *pf
+; r0 - t
+; r1 - pitch
+; r2 - pf
+INIT_XMM
 cglobal byte2word48_SSE2, 3, 3, 8, srcp, src_pitch, dstp
    movq m0, [srcpq]
    movd m1, [srcpq + 8]
