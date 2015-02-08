@@ -653,6 +653,8 @@ cglobal computeNetwork0_SSE2, 3, 5, 8, input, weights, d
    cmp r4, 192
    jl .loop
 
+   ; This block performs a horizontal sum of each accumulator (m0..m3) and packs the results in m0 (sum(m3) sum(m2) sum(m1) sum(m0)).
+   ; Sadly replacing the twelve instructions with three haddps makes no difference whatsoever on this Core 2 Duo.
    movaps m4,m0
    movaps m5,m2
    unpcklpd m0,m1
@@ -662,9 +664,10 @@ cglobal computeNetwork0_SSE2, 3, 5, 8, input, weights, d
    addps m0,m4
    addps m2,m5
    movaps m6,m0
-   shufps m0,m2,136
-   shufps m6,m2,221
+   shufps m0,m2,136 ; 10001000b
+   shufps m6,m2,221 ; 11011101b
    addps m0,m6
+
    addps m0,[weightsq+768]
    ;// const float t = temp[0];
    ;// elliott4_SSE(temp);
@@ -763,18 +766,9 @@ cglobal computeNetwork0_FMA3, 3, 5, 8, input, weights, d
    cmp r4, 192
    jl .loop
 
-   movaps m4,m0
-   movaps m5,m2
-   unpcklpd m0,m1
-   unpcklpd m2,m3
-   unpckhpd m4,m1
-   unpckhpd m5,m3
-   addps m0,m4
-   addps m2,m5
-   movaps m6,m0
-   shufps m0,m2,136
-   shufps m6,m2,221
-   addps m0,m6
+   haddps m0, m1
+   haddps m2, m3
+   haddps m0, m2
 
    addps m0,[weightsq+768]
    ;// const float t = temp[0];
@@ -868,18 +862,10 @@ cglobal computeNetwork0_FMA4, 3, 5, 8, input, weights, d
    cmp r4, 192
    jl .loop
 
-   movaps m4,m0
-   movaps m5,m2
-   unpcklpd m0,m1
-   unpcklpd m2,m3
-   unpckhpd m4,m1
-   unpckhpd m5,m3
-   addps m0,m4
-   addps m2,m5
-   movaps m6,m0
-   shufps m0,m2,136
-   shufps m6,m2,221
-   addps m0,m6
+   haddps m0, m1
+   haddps m2, m3
+   haddps m0, m2
+
    addps m0,[weightsq+768]
    ;// const float t = temp[0];
    ;// elliott4_SSE(temp);
@@ -1356,6 +1342,9 @@ cglobal dotProd_m32_m16_SSE2, 6, 7, 8, data, weights, vals, n, len, istd
    add weightsq,64
    sub lend,4
    jnz .lloop
+
+   ; This block performs a horizontal sum of each accumulator (m0..m3) and packs the results in m0 (sum(m3) sum(m2) sum(m1) sum(m0)).
+   ; Sadly replacing the twelve instructions with three haddps makes no difference whatsoever on this Core 2 Duo.
    movaps m4,m0
    movaps m5,m2
    unpcklpd m0,m1
@@ -1368,6 +1357,7 @@ cglobal dotProd_m32_m16_SSE2, 6, 7, 8, data, weights, vals, n, len, istd
    shufps m0,m2,136
    shufps m6,m2,221
    addps m6,m0
+
    movaps [valsq],m6
    add valsq,16
    sub nq,4
@@ -1426,18 +1416,11 @@ cglobal dotProd_m32_m16_FMA3, 6, 7, 8, data, weights, vals, n, len, istd
    add weightsq,64
    sub lend,4
    jnz .lloop
-   movaps m4,m0
-   movaps m5,m2
-   unpcklpd m0,m1
-   unpcklpd m2,m3
-   unpckhpd m4,m1
-   unpckhpd m5,m3
-   addps m0,m4
-   addps m2,m5
-   movaps m6,m0
-   shufps m0,m2,136
-   shufps m6,m2,221
-   addps m6,m0
+
+   haddps m0, m1
+   haddps m2, m3
+   haddps m0, m2
+
    movaps [valsq],m6
    add valsq,16
    sub nq,4
@@ -1495,18 +1478,11 @@ cglobal dotProd_m32_m16_FMA4, 6, 7, 8, data, weights, vals, n, len, istd
    add weightsq,64
    sub lend,4
    jnz .lloop
-   movaps m4,m0
-   movaps m5,m2
-   unpcklpd m0,m1
-   unpcklpd m2,m3
-   unpckhpd m4,m1
-   unpckhpd m5,m3
-   addps m0,m4
-   addps m2,m5
-   movaps m6,m0
-   shufps m0,m2,136
-   shufps m6,m2,221
-   addps m6,m0
+
+   haddps m0, m1
+   haddps m2, m3
+   haddps m0, m2
+
    movaps [valsq],m6
    add valsq,16
    sub nq,4
