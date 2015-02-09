@@ -36,29 +36,35 @@
 
 
 // Functions implemented in nnedi3.asm
+extern void nnedi3_byte2float48_SSE2(const uint8_t *t, const int pitch, float *p);
 extern void nnedi3_word2float48_SSE2(const uint8_t *t, const int pitch, float *pf);
 extern void nnedi3_byte2word48_SSE2(const uint8_t *t, const int pitch, float *pf);
 extern void nnedi3_byte2word64_SSE2(const uint8_t *t, const int pitch, float *p);
-extern void nnedi3_computeNetwork0new_SSE2(const float *datai, const float *weights, uint8_t *d);
+
 extern int32_t nnedi3_processLine0_SSE2(const uint8_t *tempu, int width, uint8_t *dstp, const uint8_t *src3p, const int src_pitch);
-extern void nnedi3_weightedAvgElliottMul5_m16_SSE2(const float *w, const int n, float *mstd);
+
+extern void nnedi3_extract_m8_SSE2(const uint8_t *srcp, const int stride, const int xdia, const int ydia, float *mstd, float *input);
 extern void nnedi3_extract_m8_i16_SSE2(const uint8_t *srcp, const int stride, const int xdia, const int ydia, float *mstd, float *inputf);
-extern void nnedi3_e0_m16_SSE2(float *s, const int n);
+
 extern void nnedi3_computeNetwork0_SSE2(const float *input, const float *weights, uint8_t *d);
-extern void nnedi3_byte2float48_SSE2(const uint8_t *t, const int pitch, float *p);
 extern void nnedi3_computeNetwork0_i16_SSE2(const float *inputf, const float *weightsf, uint8_t *d);
+extern void nnedi3_computeNetwork0new_SSE2(const float *datai, const float *weights, uint8_t *d);
+
+extern void nnedi3_weightedAvgElliottMul5_m16_SSE2(const float *w, const int n, float *mstd);
+
+extern void nnedi3_e0_m16_SSE2(float *s, const int n);
 extern void nnedi3_e1_m16_SSE2(float *s, const int n);
 extern void nnedi3_e2_m16_SSE2(float *s, const int n);
-extern void nnedi3_extract_m8_SSE2(const uint8_t *srcp, const int stride, const int xdia, const int ydia, float *mstd, float *input);
+
 extern void nnedi3_dotProd_SSE2(const float *data, const float *weights, float *vals, const int n, const int len, const float *istd);
 extern void nnedi3_dotProd_i16_SSE2(const float *dataf, const float *weightsf, float *vals, const int n, const int len, const float *istd);
 
-extern void nnedi3_e0_m16_FMA3(float *s, const int n);
 extern void nnedi3_computeNetwork0_FMA3(const float *input, const float *weights, uint8_t *d);
+extern void nnedi3_e0_m16_FMA3(float *s, const int n);
 extern void nnedi3_dotProd_FMA3(const float *data, const float *weights, float *vals, const int n, const int len, const float *istd);
 
-extern void nnedi3_e0_m16_FMA4(float *s, const int n);
 extern void nnedi3_computeNetwork0_FMA4(const float *input, const float *weights, uint8_t *d);
+extern void nnedi3_e0_m16_FMA4(float *s, const int n);
 extern void nnedi3_dotProd_FMA4(const float *data, const float *weights, float *vals, const int n, const int len, const float *istd);
 
 
