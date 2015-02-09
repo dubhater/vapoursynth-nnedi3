@@ -11,7 +11,7 @@ Usage
 
 ::
 
-   nnedi3.nnedi3(clip clip, int field[, bint dh=False, bint Y=True, bint U=True, bint V=True, int nsize=6, int nns=1, int qual=1, int etype=0, int pscrn=2, int opt=2, int fapprox=15])
+   nnedi3.nnedi3(clip clip, int field[, bint dh=False, bint Y=True, bint U=True, bint V=True, int nsize=6, int nns=1, int qual=1, int etype=0, int pscrn=2, bint opt=True, int fapprox=15])
 
 Allowed values (ranges are inclusive):
 
@@ -21,7 +21,6 @@ Allowed values (ranges are inclusive):
 - qual: 1..2
 - etype: 0..1
 - pscrn: 0..4
-- opt: 1..2
 - fapprox: 0..15
 
 When the input clip has more than 8 bits per sample, some parameters' allowed and default values change:
@@ -29,9 +28,11 @@ When the input clip has more than 8 bits per sample, some parameters' allowed an
 - pscrn: 0, 1, default 1
 - fapprox: 0, 4, 8, 12, default 12
 
+The opt parameter is now a boolean. If False, only C functions will be used. If True, the best functions that can run on your CPU will be selected automatically.
+
 ::
 
-   nnedi3.nnedi3_rpow2(clip clip, int rfactor[, int width=clip.width*rfactor, int height=clip.height*rfactor, bint correct_shift=1, int nsize=0, int nns=3, int qual=1, int etype=0, int pscrn=2, int opt=2, int fapprox=15])
+   nnedi3.nnedi3_rpow2(clip clip, int rfactor[, int width=clip.width*rfactor, int height=clip.height*rfactor, bint correct_shift=1, int nsize=0, int nns=3, int qual=1, int etype=0, int pscrn=2, bint opt=True, int fapprox=15])
 
 Requires Firesledge's fmtconv plugin.
 
