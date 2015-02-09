@@ -473,77 +473,6 @@ cglobal extract_m8_i16_SSE2, 6, 7, 8, srcp, stride, xdia, ydia, mstd, inputf
    RET
 
 
-; parameters:
-;  const float *dataf,
-;  const float *weightsf,
-;  float *vals,
-;  const int n,
-;  const int len,
-;  const float *istd
-INIT_XMM
-cglobal dotProd_m32_m16_i16_SSE2, 6, 7, 8, data, weights, vals, n, len, istd
-   mov r6,dataq ; r6, r0 - dataf
-   PUSH valsq   ; r2 - vals
-   PUSH nq   ; r3 - n
-.nloop:
-   mov dataq,r6 ; r0, r6 - dataf
-   pxor m0,m0
-   pxor m1,m1
-   pxor m2,m2
-   pxor m3,m3
-   ; original value of r4 needs to be restored here
-   PUSH lenq   ; r4 - len
-.lloop:
-   mova m4,[dataq] ; r0 - dataf
-   mova m5,m4
-   mova m6,m4
-   mova m7,m4
-   pmaddwd m4,[weightsq] ; r1 - weightsf
-   pmaddwd m5,[weightsq+16]
-   pmaddwd m6,[weightsq+32]
-   pmaddwd m7,[weightsq+48]
-   paddd m0,m4
-   paddd m1,m5
-   paddd m2,m6
-   paddd m3,m7
-
-   add dataq,16 ; r0 - dataf
-   add weightsq,64 ; r1 - weightsf
-   sub lenq,8 ; r4 - len
-   jnz .lloop
-   POP lenq ; r4 - len (original)
-   mova m4,m0
-   mova m5,m2
-   punpcklqdq m0,m1
-   punpcklqdq m2,m3
-   punpckhqdq m4,m1
-   punpckhqdq m5,m3
-   paddd m0,m4
-   paddd m2,m5
-   mova m6,m0
-   shufps m0,m2,136
-   shufps m6,m2,221
-   paddd m6,m0
-   mova [valsq],m6 ; r2 - vals
-   add valsq,16 ; r2 - vals
-   sub nq,4 ; r3 - n
-   jnz .nloop
-   POP nq ; r3 - n (original)
-   POP valsq ; r2 - vals (original)
-   movss m7,[istdq] ; r5 - istd
-   pshufd m7,m7,0
-   xor r5,r5 ; r5 - 0
-.aloop:
-   mova m0,[valsq+r5] ; r2 - vals (original)
-   cvtdq2ps m0,m0
-   mulps m0,[weightsq+r5*2] ; r1 - weightsf
-   mulps m0,m7
-   addps m0,[weightsq+r5*2+16] ; r1 - weightsf
-   movaps [valsq+r5],m0 ; r2 - vals
-   add r5,16
-   sub nq,4 ; r3 - n
-   jnz .aloop
-   RET
 
 
 ; Used by default with 16 bit input
@@ -1311,7 +1240,7 @@ cglobal extract_m8_SSE2, 6, 7, 8, srcp, stride, xdia, ydia, mstd, input
 ;  const int len,
 ;  const float *istd
 INIT_XMM
-cglobal dotProd_m32_m16_SSE2, 6, 7, 8, data, weights, vals, n, len, istd
+cglobal dotProd_SSE2, 6, 7, 8, data, weights, vals, n, len, istd
    PUSH valsq
    PUSH nq
    PUSH istdq ; r5
@@ -1388,7 +1317,7 @@ cglobal dotProd_m32_m16_SSE2, 6, 7, 8, data, weights, vals, n, len, istd
 ;  const int len,
 ;  const float *istd
 INIT_XMM
-cglobal dotProd_m32_m16_FMA3, 6, 7, 8, data, weights, vals, n, len, istd
+cglobal dotProd_FMA3, 6, 7, 8, data, weights, vals, n, len, istd
    PUSH valsq
    PUSH nq
    PUSH istdq ; r5
@@ -1450,7 +1379,7 @@ cglobal dotProd_m32_m16_FMA3, 6, 7, 8, data, weights, vals, n, len, istd
 ;  const int len,
 ;  const float *istd
 INIT_XMM
-cglobal dotProd_m32_m16_FMA4, 6, 7, 8, data, weights, vals, n, len, istd
+cglobal dotProd_FMA4, 6, 7, 8, data, weights, vals, n, len, istd
    PUSH valsq
    PUSH nq
    PUSH istdq ; r5
@@ -1512,7 +1441,7 @@ cglobal dotProd_m32_m16_FMA4, 6, 7, 8, data, weights, vals, n, len, istd
 ;  const int len,
 ;  const float *istd
 INIT_XMM
-cglobal dotProd_m48_m16_i16_SSE2, 6, 7, 8, data, weights, vals, n, len, istd
+cglobal dotProd_i16_SSE2, 6, 7, 8, data, weights, vals, n, len, istd
    PUSH valsq
    PUSH nq
    PUSH istdq ; r5
@@ -1578,76 +1507,4 @@ cglobal dotProd_m48_m16_i16_SSE2, 6, 7, 8, data, weights, vals, n, len, istd
    jnz .aloop
    RET
 
-
-; parameters:
-;  const float *data,
-;  const float *weights,
-;  float *vals,
-;  const int n,
-;  const int len,
-;  const float *istd
-INIT_XMM
-cglobal dotProd_m48_m16_SSE2, 6, 7, 8, data, weights, vals, n, len, istd
-   PUSH valsq
-   PUSH nq
-   PUSH istdq ; r5
-   mov r5,dataq
-   mov r6d,lend
-.nloop:
-   mov dataq,r5
-   xorps m0,m0
-   xorps m1,m1
-   xorps m2,m2
-   xorps m3,m3
-   mov lend,r6d
-.lloop:
-   movaps m4,[dataq]
-   movaps m5,m4
-   movaps m6,m4
-   movaps m7,m4
-   mulps m4,[weightsq]
-   mulps m5,[weightsq+16]
-   mulps m6,[weightsq+32]
-   mulps m7,[weightsq+48]
-   addps m0,m4
-   addps m1,m5
-   addps m2,m6
-   addps m3,m7
-
-   add dataq,16
-   add weightsq,64
-   sub lend,4
-   jnz .lloop
-   movaps m4,m0
-   movaps m5,m2
-   unpcklpd m0,m1
-   unpcklpd m2,m3
-   unpckhpd m4,m1
-   unpckhpd m5,m3
-   addps m0,m4
-   addps m2,m5
-   movaps m6,m0
-   shufps m0,m2,136
-   shufps m6,m2,221
-   addps m6,m0
-   movaps [valsq],m6
-   add valsq,16
-   sub nq,4
-   jnz .nloop
-   POP istdq ; r5
-   POP nq
-   POP valsq
-
-   movss m7,[istdq] ; r5
-   shufps m7,m7,0
-   xor r5,r5
-.aloop:
-   movaps m0,[valsq+r5]
-   mulps m0,m7
-   addps m0,[weightsq+r5]
-   movaps [valsq+r5],m0
-   add r5,16
-   sub nq,4
-   jnz .aloop
-   RET
 
