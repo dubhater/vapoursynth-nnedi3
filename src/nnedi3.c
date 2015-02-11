@@ -1139,7 +1139,7 @@ static void VS_CC nnedi3Init(VSMap *in, VSMap *out, void **instanceData, VSNode 
             // into first layer weights.
             for (int j=0; j<4; ++j)
                 for (int k=0; k<48; ++k)
-                    d->weights0[j*48+k] = (bdata[j*48+k]-mean[j])/ (127.5 * (1 << (d->vi.format->bitsPerSample - 8)));
+                    d->weights0[j*48+k] = (float)((bdata[j*48+k]-mean[j])/ (127.5 * (1 << (d->vi.format->bitsPerSample - 8))));
             memcpy(d->weights0+4*48,bdata+4*48,(dims0-4*48)*sizeof(float));
             if (d->opt) // shuffle weight order for asm
             {
@@ -1195,7 +1195,7 @@ static void VS_CC nnedi3Init(VSMap *in, VSMap *out, void **instanceData, VSNode 
                 for (int k=0; k<asize; ++k)
                     ws[j*asize+k] = roundds((bdataT[j*asize+k]-mean[asize+1+j]-mean[k])*scale);
                 wf[(j>>2)*8+(j&3)] = (float)(mval/32767.0);
-                wf[(j>>2)*8+(j&3)+4] = bdataT[boff+j]-mean[asize];
+                wf[(j>>2)*8+(j&3)+4] = (float)(bdataT[boff+j]-mean[asize]);
             }
             for (int j=nnst; j<nnst*2; ++j) // elliott neurons
             {
@@ -1229,11 +1229,11 @@ static void VS_CC nnedi3Init(VSMap *in, VSMap *out, void **instanceData, VSNode 
                     const double q = j < nnst ? mean[k] : 0.0;
                     if (d->opt) // shuffle weight order for asm
                         d->weights1[i][(j>>2)*asize*4+(k>>2)*16+(j&3)*4+(k&3)] = 
-                            bdataT[j*asize+k]-mean[asize+1+j]-q;
+                            (float)(bdataT[j*asize+k]-mean[asize+1+j]-q);
                     else
-                        d->weights1[i][j*asize+k] = bdataT[j*asize+k]-mean[asize+1+j]-q;
+                        d->weights1[i][j*asize+k] = (float)(bdataT[j*asize+k]-mean[asize+1+j]-q);
                 }
-                d->weights1[i][boff+j] = bdataT[boff+j]-(j<nnst?mean[asize]:0.0);
+                d->weights1[i][boff+j] = (float)(bdataT[boff+j]-(j<nnst?mean[asize]:0.0));
             }
         }
         free(mean);
@@ -1365,42 +1365,42 @@ static void VS_CC nnedi3Create(const VSMap *in, VSMap *out, void *userData, VSCo
     }
 
     // Get the parameters.
-    d.field = vsapi->propGetInt(in, "field", 0, 0);
+    d.field = int64ToIntS(vsapi->propGetInt(in, "field", 0, 0));
 
     // Defaults to 0.
-    d.dh = vsapi->propGetInt(in, "dh", 0, &err);
+    d.dh = int64ToIntS(vsapi->propGetInt(in, "dh", 0, &err));
 
-    d.Y = vsapi->propGetInt(in, "Y", 0, &err);
+    d.Y = int64ToIntS(vsapi->propGetInt(in, "Y", 0, &err));
     if (err) {
         d.Y = 1;
     }
-    d.U = vsapi->propGetInt(in, "U", 0, &err);
+    d.U = int64ToIntS(vsapi->propGetInt(in, "U", 0, &err));
     if (err) {
         d.U = 1;
     }
-    d.V = vsapi->propGetInt(in, "V", 0, &err);
+    d.V = int64ToIntS(vsapi->propGetInt(in, "V", 0, &err));
     if (err) {
         d.V = 1;
     }
 
-    d.nsize = vsapi->propGetInt(in, "nsize", 0, &err);
+    d.nsize = int64ToIntS(vsapi->propGetInt(in, "nsize", 0, &err));
     if (err) {
         d.nsize = 6;
     }
 
-    d.nnsparam = vsapi->propGetInt(in, "nns", 0, &err);
+    d.nnsparam = int64ToIntS(vsapi->propGetInt(in, "nns", 0, &err));
     if (err) {
         d.nnsparam = 1;
     }
 
-    d.qual = vsapi->propGetInt(in, "qual", 0, &err);
+    d.qual = int64ToIntS(vsapi->propGetInt(in, "qual", 0, &err));
     if (err) {
         d.qual = 1;
     }
 
-    d.etype = vsapi->propGetInt(in, "etype", 0, &err);
+    d.etype = int64ToIntS(vsapi->propGetInt(in, "etype", 0, &err));
 
-    d.pscrn = vsapi->propGetInt(in, "pscrn", 0, &err);
+    d.pscrn = int64ToIntS(vsapi->propGetInt(in, "pscrn", 0, &err));
     if (err) {
         if (d.vi.format->bitsPerSample == 8)
             d.pscrn = 2;
@@ -1413,7 +1413,7 @@ static void VS_CC nnedi3Create(const VSMap *in, VSMap *out, void *userData, VSCo
         d.opt = 1;
     }
 
-    d.fapprox = vsapi->propGetInt(in, "fapprox", 0, &err);
+    d.fapprox = int64ToIntS(vsapi->propGetInt(in, "fapprox", 0, &err));
     if (err) {
         if (d.vi.format->bitsPerSample == 8)
             d.fapprox = 15;
@@ -1526,7 +1526,7 @@ static void VS_CC nnedi3_rpow2Create(const VSMap *in, VSMap *out, void *userData
     const char kernel[] = "spline36";
     const char *keysToCopy[] = { "nsize", "nns", "qual", "etype", "pscrn", "opt", "fapprox", NULL };
 
-    rfactor = vsapi->propGetInt(in, "rfactor", 0, NULL);
+    rfactor = int64ToIntS(vsapi->propGetInt(in, "rfactor", 0, NULL));
     if (rfactor < 2 || rfactor > 1024) {
         vsapi->setError(out, "nnedi3_rpow2: rfactor must be between 2 and 1024");
         return;
@@ -1552,9 +1552,9 @@ static void VS_CC nnedi3_rpow2Create(const VSMap *in, VSMap *out, void *userData
         return;
     }
 
-    width = vsapi->propGetInt(in, "width", 0, &err);
+    width = int64ToIntS(vsapi->propGetInt(in, "width", 0, &err));
 
-    height = vsapi->propGetInt(in, "height", 0, &err);
+    height = int64ToIntS(vsapi->propGetInt(in, "height", 0, &err));
 
     correct_shift = !!vsapi->propGetInt(in, "correct_shift", 0, &err);
     if (err) {
