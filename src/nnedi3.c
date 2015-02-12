@@ -705,7 +705,7 @@ void e0_m16_C(float *s, const int n)
     for (int i=0; i<n; ++i)
     {
         const int t = (int)(max(min(s[i],exp_hi[0]),exp_lo[0])*e0_mult[0]+e0_bias[0]);
-        s[i] = (*((float*)&t));
+        memcpy(&s[i], &t, sizeof(float));
     }
 }
 
@@ -731,7 +731,9 @@ void e1_m16_C(float *s, const int n)
         x -= i;
         x = e1_c0[0] + e1_c1[0]*x + e1_c2[0]*x*x;
         i = (i+127)<<23;
-        s[q] = x * *((float*)&i);
+        float i_f;
+        memcpy(&i_f, &i, sizeof(float));
+        s[q] = x * i_f;
     }
 }
 
