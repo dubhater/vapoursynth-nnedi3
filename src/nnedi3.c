@@ -686,25 +686,23 @@ void extract_m8_i16_C(const uint8_t *srcp, const int stride,
 }
 
 
-const float exp_lo[4] = { -80.0f, -80.0f, -80.0f, -80.0f };
-const float exp_hi[4] = { +80.0f, +80.0f, +80.0f, +80.0f };
+const float exp_lo = -80.0f;
+const float exp_hi = +80.0f;
 
 
 // exp from:  A Fast, Compact Approximation of the Exponential Function (1998)
 //            Nicol N. Schraudolph
 
 
-const float e0_mult[4] = { // (1.0/ln(2))*(2^23)
-    12102203.161561486f, 12102203.161561486f, 12102203.161561486f, 12102203.161561486f };
-const float e0_bias[4] = { // (2^23)*127.0-486411.0
-    1064866805.0f, 1064866805.0f, 1064866805.0f, 1064866805.0f };
+const float e0_mult = 12102203.161561486f; // (1.0/ln(2))*(2^23)
+const float e0_bias = 1064866805.0f; // (2^23)*127.0-486411.0
 
 
 void e0_m16_C(float *s, const int n)
 {
     for (int i=0; i<n; ++i)
     {
-        const int t = (int)(max(min(s[i],exp_hi[0]),exp_lo[0])*e0_mult[0]+e0_bias[0]);
+        const int t = (int)(max(min(s[i],exp_hi),exp_lo)*e0_mult+e0_bias);
         memcpy(&s[i], &t, sizeof(float));
     }
 }
@@ -713,23 +711,21 @@ void e0_m16_C(float *s, const int n)
 // exp from Loren Merritt
 
 
-const float e1_scale[4] = { // 1/ln(2)
-    1.4426950409f, 1.4426950409f, 1.4426950409f, 1.4426950409f };
-const float e1_bias[4] = { // 3<<22
-    12582912.0f, 12582912.0f, 12582912.0f, 12582912.0f };
-const float e1_c0[4] = { 1.00035f, 1.00035f, 1.00035f, 1.00035f };
-const float e1_c1[4] = { 0.701277797f, 0.701277797f, 0.701277797f, 0.701277797f };
-const float e1_c2[4] = { 0.237348593f, 0.237348593f, 0.237348593f, 0.237348593f };
+const float e1_scale = 1.4426950409f; // 1/ln(2)
+const float e1_bias = 12582912.0f; // 3<<22
+const float e1_c0 = 1.00035f;
+const float e1_c1 = 0.701277797f;
+const float e1_c2 = 0.237348593f;
 
 
 void e1_m16_C(float *s, const int n)
 {
     for (int q=0; q<n; ++q)
     {
-        float x = max(min(s[q],exp_hi[0]),exp_lo[0])*e1_scale[0];
+        float x = max(min(s[q],exp_hi),exp_lo)*e1_scale;
         int i = (int)(x + 128.5f) - 128;
         x -= i;
-        x = e1_c0[0] + e1_c1[0]*x + e1_c2[0]*x*x;
+        x = e1_c0 + e1_c1*x + e1_c2*x*x;
         i = (i+127)<<23;
         float i_f;
         memcpy(&i_f, &i, sizeof(float));
@@ -741,13 +737,13 @@ void e1_m16_C(float *s, const int n)
 void e2_m16_C(float *s, const int n)
 {
     for (int i=0; i<n; ++i)
-        s[i] = expf(max(min(s[i],exp_hi[0]),exp_lo[0]));
+        s[i] = expf(max(min(s[i],exp_hi),exp_lo));
 }
 
 // exp from Intel Approximate Math (AM) Library
 
 
-const float min_weight_sum[4] = { 1e-10f, 1e-10f, 1e-10f, 1e-10f };
+const float min_weight_sum = 1e-10f;
 
 
 void weightedAvgElliottMul5_m16_C(const float *w, const int n, float *mstd)
@@ -758,7 +754,7 @@ void weightedAvgElliottMul5_m16_C(const float *w, const int n, float *mstd)
         vsum += w[i]*(w[n+i]/(1.0f+fabsf(w[n+i])));
         wsum += w[i];
     }
-    if (wsum > min_weight_sum[0])
+    if (wsum > min_weight_sum)
         mstd[3] += ((5.0f*vsum)/wsum)*mstd[1]+mstd[0];
     else
         mstd[3] += mstd[0];
