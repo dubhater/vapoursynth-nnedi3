@@ -18,13 +18,12 @@
 * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 */
 
-#define VS_TARGET_CPU_X86
 
 typedef struct CPUFeatures {
     // This is to determine if the cpu is up to the minimum requirements in terms of supported instructions
     // that the VapourSynth core uses.
     char can_run_vs;
-#ifdef VS_TARGET_CPU_X86
+#ifdef NNEDI3_X86
     // On x86, all features up to sse2 are required.
     char sse3;
     char ssse3;
@@ -34,7 +33,7 @@ typedef struct CPUFeatures {
     char fma4;
     char avx;
     char avx2;
-#elif defined(VS_TARGET_CPU_ARM)
+#elif defined(NNEDI3_ARM)
     // On ARM, VFP-D16+ (16 double registers or more) is required.
     char half_fp;
     char edsp;
@@ -42,7 +41,7 @@ typedef struct CPUFeatures {
     char neon;
     char fast_mult;
     char idiv_a;
-#elif defined(VS_TARGET_CPU_POWERPC)
+#elif defined(NNEDI3_POWERPC)
     // On PowerPC, FPU and MMU are required.
     char altivec;
     char spe;
@@ -50,15 +49,8 @@ typedef struct CPUFeatures {
     char efp_double;
     char dfp;
     char vsx;
-#else
-#error No VS_TARGET_CPU_* defined/handled!
 #endif
 } CPUFeatures;
 
-#ifdef __cplusplus
-#define CPU_FEATURES_EXTERN_C extern "C"
-#else
-#define CPU_FEATURES_EXTERN_C
-#endif
 
-CPU_FEATURES_EXTERN_C void getCPUFeatures(CPUFeatures *cpuFeatures);
+void getCPUFeatures(CPUFeatures *cpuFeatures);

@@ -9,6 +9,8 @@ This is a port of tritical's nnedi3 filter.
 Usage
 =====
 
+The file ``nnedi3 weights.bin`` is required. In Windows, it must be located in the same folder as ``libnnedi3.dll``. Everywhere else it can be located either in the same folder as ``libnnedi3.so``/``libnnedi3.dylib``, or in ``$prefix/share/nnedi3/``. The build system installs it at the latter location automatically.
+
 ::
 
    nnedi3.nnedi3(clip clip, int field[, bint dh=False, bint Y=True, bint U=True, bint V=True, int nsize=6, int nns=1, int qual=1, int etype=0, int pscrn=2, bint opt=True, int fapprox=15])
@@ -63,7 +65,7 @@ Compilation
    ./configure
    make
 
-yasm is currently not optional.
+On x86, yasm is currently not optional.
 
 DLLs can be found in the "releases" section.
 

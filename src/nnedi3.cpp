@@ -18,6 +18,7 @@
 **   Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 */
 
+#include <errno.h>
 #include <float.h>
 #include <math.h>
 #include <stdint.h>
@@ -25,17 +26,35 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <string>
+
 #include <VapourSynth.h>
 #include <VSHelper.h>
 
 #include "cpufeatures.h"
+
+#ifdef _WIN32
+#include <vector>
+
+#include <windows.h>
+
+static std::wstring utf16_from_bytes(const std::string &str) {
+    int required_size = MultiByteToWideChar(CP_UTF8, 0, str.c_str(), -1, NULL, 0);
+    std::vector<wchar_t> wbuffer;
+    wbuffer.resize(required_size);
+    MultiByteToWideChar(CP_UTF8, 0, str.c_str(), -1, wbuffer.data(), required_size);
+    return std::wstring(wbuffer.data());
+}
+#endif
 
 
 #define min(a, b)  (((a) < (b)) ? (a) : (b))
 #define max(a, b)  (((a) > (b)) ? (a) : (b))
 
 
+#ifdef NNEDI3_X86
 // Functions implemented in nnedi3.asm
+extern "C" {
 extern void nnedi3_byte2float48_SSE2(const uint8_t *t, const int pitch, float *p);
 extern void nnedi3_word2float48_SSE2(const uint8_t *t, const int pitch, float *pf);
 extern void nnedi3_byte2word48_SSE2(const uint8_t *t, const int pitch, float *pf);
@@ -66,6 +85,8 @@ extern void nnedi3_dotProd_FMA3(const float *data, const float *weights, float *
 extern void nnedi3_computeNetwork0_FMA4(const float *input, const float *weights, uint8_t *d);
 extern void nnedi3_e0_m16_FMA4(float *s, const int n);
 extern void nnedi3_dotProd_FMA4(const float *data, const float *weights, float *vals, const int n, const int len, const float *istd);
+}
+#endif
 
 
 // Things that mustn't be shared between threads.
@@ -352,6 +373,7 @@ void byte2word48_C(const uint8_t *t, const int pitch, float *pf)
 
 #define CB2(n) max(min((n),254),0)
 
+#ifdef NNEDI3_X86
 int32_t processLine0_maybeSSE2(const uint8_t *tempu, int width, uint8_t *dstp,
         const uint8_t *src3p, const int src_pitch, const int max_value) {
     int32_t count = 0;
@@ -370,6 +392,7 @@ int32_t processLine0_maybeSSE2(const uint8_t *tempu, int width, uint8_t *dstp,
     }
     return count;
 }
+#endif
 
 
 int32_t processLine0_C(const uint8_t *tempu, int width, uint8_t *dstp,
@@ -910,9 +933,11 @@ void shufflePreScrnL2L3(float *wf, float *rf, const int opt)
 
 
 static void selectFunctions(nnedi3Data *d) {
+#ifdef NNEDI3_X86
     int opt = d->opt;
     CPUFeatures cpu;
     getCPUFeatures(&cpu);
+#endif
 
     if (d->vi.format->bitsPerSample == 8) {
         d->copyPad = copyPad;
@@ -920,58 +945,92 @@ static void selectFunctions(nnedi3Data *d) {
         d->evalFunc_1 = evalFunc_1;
 
         // evalFunc_0
-        d->processLine0 = opt ? processLine0_maybeSSE2 : processLine0_C;
+        d->processLine0 = processLine0_C;
 
         if (d->pscrn < 2) { // original prescreener
             if (d->fapprox & 1) { // int16 dot products
-                d->readPixels = opt ? nnedi3_byte2word48_SSE2 : byte2word48_C;
-                d->computeNetwork0 = opt ? nnedi3_computeNetwork0_i16_SSE2 : computeNetwork0_i16_C;
+                d->readPixels = byte2word48_C;
+                d->computeNetwork0 = computeNetwork0_i16_C;
             } else {
-                d->readPixels = opt ? nnedi3_byte2float48_SSE2 : byte2float48_C;
-                d->computeNetwork0 = opt ? nnedi3_computeNetwork0_SSE2 : computeNetwork0_C;
-                if (opt) {
+                d->readPixels = byte2float48_C;
+                d->computeNetwork0 = computeNetwork0_C;
+            }
+        } else { // new prescreener
+            // only int16 dot products
+            d->readPixels = byte2word64_C;
+            d->computeNetwork0 = computeNetwork0new_C;
+        }
+
+        // evalFunc_1
+        d->wae5 = weightedAvgElliottMul5_m16_C;
+
+        if (d->fapprox & 2) { // use int16 dot products
+            d->extract = extract_m8_i16_C;
+            d->dotProd = dotProdS_C;
+        } else { // use float dot products
+            d->extract = extract_m8_C;
+            d->dotProd = dotProd_C;
+        }
+
+        if ((d->fapprox & 12) == 0) { // use slow exp
+            d->expfunc = e2_m16_C;
+        } else if ((d->fapprox & 12) == 4) { // use faster exp
+            d->expfunc = e1_m16_C;
+        } else { // use fastest exp
+            d->expfunc = e0_m16_C;
+        }
+
+#ifdef NNEDI3_X86
+        if (opt) {
+            // evalFunc_0
+            d->processLine0 = processLine0_maybeSSE2;
+
+            if (d->pscrn < 2) { // original prescreener
+                if (d->fapprox & 1) { // int16 dot products
+                    d->readPixels = nnedi3_byte2word48_SSE2;
+                    d->computeNetwork0 = nnedi3_computeNetwork0_i16_SSE2;
+                } else {
+                    d->readPixels = nnedi3_byte2float48_SSE2;
+                    d->computeNetwork0 = nnedi3_computeNetwork0_SSE2;
                     if (cpu.fma3)
                         d->computeNetwork0 = nnedi3_computeNetwork0_FMA3;
                     if (cpu.fma4)
                         d->computeNetwork0 = nnedi3_computeNetwork0_FMA4;
                 }
+            } else { // new prescreener
+                // only int16 dot products
+                d->readPixels = nnedi3_byte2word64_SSE2;
+                d->computeNetwork0 = nnedi3_computeNetwork0new_SSE2;
             }
-        } else { // new prescreener
-            // only int16 dot products
-            d->readPixels = opt ? nnedi3_byte2word64_SSE2 : byte2word64_C;
-            d->computeNetwork0 = opt ? nnedi3_computeNetwork0new_SSE2 : computeNetwork0new_C;
-        }
 
-        // evalFunc_1
-        d->wae5 = opt ? nnedi3_weightedAvgElliottMul5_m16_SSE2 : weightedAvgElliottMul5_m16_C;
+            // evalFunc_1
+            d->wae5 = nnedi3_weightedAvgElliottMul5_m16_SSE2;
 
-        if (d->fapprox & 2) { // use int16 dot products
-            d->extract = opt ? nnedi3_extract_m8_i16_SSE2 : extract_m8_i16_C;
-            d->dotProd = opt ? nnedi3_dotProd_i16_SSE2 : dotProdS_C;
-        } else { // use float dot products
-            d->extract = opt ? nnedi3_extract_m8_SSE2 : extract_m8_C;
-            d->dotProd = opt ? nnedi3_dotProd_SSE2 : dotProd_C;
-            if (opt) {
+            if (d->fapprox & 2) { // use int16 dot products
+                d->extract = nnedi3_extract_m8_i16_SSE2;
+                d->dotProd = nnedi3_dotProd_i16_SSE2;
+            } else { // use float dot products
+                d->extract = nnedi3_extract_m8_SSE2;
+                d->dotProd = nnedi3_dotProd_SSE2;
                 if (cpu.fma3)
                     d->dotProd = nnedi3_dotProd_FMA3;
                 if (cpu.fma4)
                     d->dotProd = nnedi3_dotProd_FMA4;
             }
-        }
 
-        if ((d->fapprox & 12) == 0) { // use slow exp
-            d->expfunc = opt ? nnedi3_e2_m16_SSE2 : e2_m16_C;
-        } else if ((d->fapprox & 12) == 4) { // use faster exp
-            d->expfunc = opt ? nnedi3_e1_m16_SSE2 : e1_m16_C;
-        } else { // use fastest exp
-            d->expfunc = opt ? nnedi3_e0_m16_SSE2 : e0_m16_C;
-            if (opt) {
+            if ((d->fapprox & 12) == 0) { // use slow exp
+                d->expfunc = nnedi3_e2_m16_SSE2;
+            } else if ((d->fapprox & 12) == 4) { // use faster exp
+                d->expfunc = nnedi3_e1_m16_SSE2;
+            } else { // use fastest exp
+                d->expfunc = nnedi3_e0_m16_SSE2;
                 if (cpu.fma3)
                     d->expfunc = nnedi3_e0_m16_FMA3;
                 if (cpu.fma4)
                     d->expfunc = nnedi3_e0_m16_FMA4;
             }
         }
+#endif
     } else {
         d->copyPad = copyPad_uint16;
         d->evalFunc_0 = evalFunc_0_uint16;
@@ -980,54 +1039,124 @@ static void selectFunctions(nnedi3Data *d) {
         // evalFunc_0
         d->processLine0 = processLine0_uint16_C;
 
-        d->readPixels = opt ? nnedi3_word2float48_SSE2 : word2float48_C;
-        d->computeNetwork0 = opt ? nnedi3_computeNetwork0_SSE2 : computeNetwork0_C;
+        d->readPixels = word2float48_C;
+        d->computeNetwork0 = computeNetwork0_C;
+
+        // evalFunc_1
+        d->wae5 = weightedAvgElliottMul5_m16_C;
+
+        d->extract = extract_m8_uint16_C;
+        d->dotProd = dotProd_C;
+
+        if ((d->fapprox & 12) == 0) { // use slow exp
+            d->expfunc = e2_m16_C;
+        } else if ((d->fapprox & 12) == 4) { // use faster exp
+            d->expfunc = e1_m16_C;
+        } else { // use fastest exp
+            d->expfunc = e0_m16_C;
+        }
+
+#ifdef NNEDI3_X86
         if (opt) {
+            // evalFunc_0
+            d->readPixels = nnedi3_word2float48_SSE2;
+            d->computeNetwork0 = nnedi3_computeNetwork0_SSE2;
             if (cpu.fma3)
                 d->computeNetwork0 = nnedi3_computeNetwork0_FMA3;
             if (cpu.fma4)
                 d->computeNetwork0 = nnedi3_computeNetwork0_FMA4;
-        }
 
-        // evalFunc_1
-        d->wae5 = opt ? nnedi3_weightedAvgElliottMul5_m16_SSE2 : weightedAvgElliottMul5_m16_C;
+            // evalFunc_1
+            d->wae5 = nnedi3_weightedAvgElliottMul5_m16_SSE2;
 
-        d->extract = extract_m8_uint16_C;
-        d->dotProd = opt ? nnedi3_dotProd_SSE2 : dotProd_C;
-        if (opt) {
+            d->dotProd = nnedi3_dotProd_SSE2;
             if (cpu.fma3)
                 d->dotProd = nnedi3_dotProd_FMA3;
             if (cpu.fma4)
                 d->dotProd = nnedi3_dotProd_FMA4;
-        }
 
-        if ((d->fapprox & 12) == 0) { // use slow exp
-            d->expfunc = opt ? nnedi3_e2_m16_SSE2 : e2_m16_C;
-        } else if ((d->fapprox & 12) == 4) { // use faster exp
-            d->expfunc = opt ? nnedi3_e1_m16_SSE2 : e1_m16_C;
-        } else { // use fastest exp
-            d->expfunc = opt ? nnedi3_e0_m16_SSE2 : e0_m16_C;
-            if (opt) {
+            if ((d->fapprox & 12) == 0) { // use slow exp
+                d->expfunc = nnedi3_e2_m16_SSE2;
+            } else if ((d->fapprox & 12) == 4) { // use faster exp
+                d->expfunc = nnedi3_e1_m16_SSE2;
+            } else { // use fastest exp
+                d->expfunc = nnedi3_e0_m16_SSE2;
                 if (cpu.fma3)
                     d->expfunc = nnedi3_e0_m16_FMA3;
                 if (cpu.fma4)
                     d->expfunc = nnedi3_e0_m16_FMA4;
             }
         }
+#endif
     }
 }
-
-
-// From binary1.asm
-extern uint8_t binary1;
-
 
 
 static void VS_CC nnedi3Init(VSMap *in, VSMap *out, void **instanceData, VSNode *node, VSCore *core, const VSAPI *vsapi) {
     nnedi3Data *d = (nnedi3Data *) * instanceData;
     vsapi->setVideoInfo(&d->vi, 1, node);
 
-    const float* bdata = (const float*)&binary1;
+    std::string weights_name("nnedi3 weights.bin");
+
+    VSPlugin *nnedi3Plugin = vsapi->getPluginById("com.deinterlace.nnedi3", core);
+    std::string plugin_path(vsapi->getPluginPath(nnedi3Plugin));
+    std::string weights_path(plugin_path.substr(0, plugin_path.find_last_of('/')) + "/" + weights_name);
+
+    FILE *weights_file = NULL;
+
+#ifdef _WIN32
+    weights_file = _wfopen(utf16_from_bytes(weights_path).c_str(), L"rb");
+#else
+    weights_file = fopen(weights_path.c_str(), "rb");
+#endif
+
+
+#if ! defined(_WIN32) && defined(NNEDI3_DATADIR)
+    if (!weights_file) {
+        weights_path = std::string(NNEDI3_DATADIR) + "/" + weights_name;
+        weights_file = fopen(weights_path.c_str(), "rb");
+    }
+#endif
+    if (!weights_file) {
+        vsapi->setError(out, ("nnedi3: Couldn't open file '" + weights_path + "'. Error message: " + strerror(errno)).c_str());
+        return;
+    }
+
+    if (fseek(weights_file, 0, SEEK_END)) {
+        vsapi->setError(out, ("nnedi3: Failed to seek to the end of '" + weights_path + "'. Error message: " + strerror(errno)).c_str());
+        fclose(weights_file);
+        return;
+    }
+
+    long expected_size = 13574928; // Version 0.9.4 of the Avisynth plugin.
+    long weights_size = ftell(weights_file);
+    if (weights_size == -1) {
+        vsapi->setError(out, ("nnedi3: Failed to determine the size of '" + weights_path + "'. Error message: " + strerror(errno)).c_str());
+        fclose(weights_file);
+        return;
+    } else if (weights_size != expected_size) {
+        vsapi->setError(out, ("nnedi3: '" + weights_path + "' has the wrong size. Expected " + std::to_string(expected_size) + " bytes, got " + std::to_string(weights_size) + " bytes.").c_str());
+        fclose(weights_file);
+        return;
+    }
+
+    if (fseek(weights_file, 0, SEEK_SET)) {
+        vsapi->setError(out, ("nnedi3: Failed to seek back to the beginning of '" + weights_path + "'. Error message: " + strerror(errno)).c_str());
+        fclose(weights_file);
+        return;
+    }
+
+    float *bdata = (float *)malloc(expected_size);
+    size_t bytes_read = fread(bdata, 1, expected_size, weights_file);
+
+    if (bytes_read != (size_t)expected_size) {
+        vsapi->setError(out, ("nnedi3: Expected to read " + std::to_string(expected_size) + " bytes from '" + weights_path + "', read " + std::to_string(bytes_read) + " bytes instead.").c_str());
+        fclose(weights_file);
+        free(bdata);
+        return;
+    }
+
+    fclose(weights_file);
 
     const int xdiaTable[NUM_NSIZE] = { 8, 16, 32, 48, 8, 16, 32 };
     const int ydiaTable[NUM_NSIZE] = { 6, 6, 6, 6, 4, 4, 4 };
@@ -1050,11 +1179,11 @@ static void VS_CC nnedi3Init(VSMap *in, VSMap *out, void **instanceData, VSNode 
         }
     }
 
-    VS_ALIGNED_MALLOC(&d->weights0, max(dims0, dims0new) * sizeof(float), 16);
+    d->weights0 = vs_aligned_malloc<float>(max(dims0, dims0new) * sizeof(float), 16);
 
     for (int i = 0; i < 2; ++i)
     {
-        VS_ALIGNED_MALLOC(&d->weights1[i], dims1 * sizeof(float), 16);
+        d->weights1[i] = vs_aligned_malloc<float>(dims1 * sizeof(float), 16);
     }
 
 
@@ -1243,6 +1372,8 @@ static void VS_CC nnedi3Init(VSMap *in, VSMap *out, void **instanceData, VSNode 
     d->asize = xdiaTable[d->nsize] * ydiaTable[d->nsize];
 
     selectFunctions(d);
+
+    free(bdata);
 }
 
 
@@ -1254,7 +1385,7 @@ int modnpf(const int m, const int n)
 }
 
 
-static const VSFrameRef *VS_CC nnedi3GetFrame(int n, int activationReason, void **instanceData, void **frameData, VSFrameContext *frameCtx, VSCore *core, const VSAPI *vsapi) {
+static const VSFrameRef *VS_CC nnedi3GetFrame(int n, int activationReason, void **instanceData, void **fData, VSFrameContext *frameCtx, VSCore *core, const VSAPI *vsapi) {
     nnedi3Data *d = (nnedi3Data *) * instanceData;
 
     if (activationReason == arInitial) {
@@ -1275,7 +1406,7 @@ static const VSFrameRef *VS_CC nnedi3GetFrame(int n, int activationReason, void 
         VSFrameRef *dst = vsapi->newVideoFrame(d->vi.format, d->vi.width, d->vi.height, src, core);
 
 
-        FrameData *frameData = malloc(sizeof(FrameData));
+        FrameData *frameData = (FrameData *)malloc(sizeof(FrameData));
 
         for (int plane = 0; plane < d->vi.format->numPlanes; plane++) {
             const int min_pad = 10;
@@ -1287,19 +1418,19 @@ static const VSFrameRef *VS_CC nnedi3GetFrame(int n, int activationReason, void 
             frameData->padded_width[plane]  = dst_width + 64;
             frameData->padded_height[plane] = dst_height + 12;
             frameData->padded_stride[plane] = modnpf(frameData->padded_width[plane] * d->vi.format->bytesPerSample + min_pad, min_alignment); // TODO: maybe min_pad is in pixels too?
-            VS_ALIGNED_MALLOC(&frameData->paddedp[plane], frameData->padded_stride[plane] * frameData->padded_height[plane], min_alignment);
+            frameData->paddedp[plane] = vs_aligned_malloc<uint8_t>(frameData->padded_stride[plane] * frameData->padded_height[plane], min_alignment);
 
             frameData->dstp[plane] = vsapi->getWritePtr(dst, plane);
             frameData->dst_stride[plane] = vsapi->getStride(dst, plane);
 
-            VS_ALIGNED_MALLOC(&frameData->lcount[plane], dst_height * sizeof(int32_t), 16);
+            frameData->lcount[plane] = vs_aligned_malloc<int32_t>(dst_height * sizeof(int32_t), 16);
             memset(frameData->lcount[plane], 0, dst_height * sizeof(int32_t));
 
             frameData->field[plane] = field_n;
         }
 
-        VS_ALIGNED_MALLOC(&frameData->input, 512 * sizeof(float), 16);
-        VS_ALIGNED_MALLOC(&frameData->temp, 2048 * sizeof(float), 16);
+        frameData->input = vs_aligned_malloc<float>(512 * sizeof(float), 16);
+        frameData->temp = vs_aligned_malloc<float>(2048 * sizeof(float), 16);
 
         // Copy src to a padded "frame" in frameData and mirror the edges.
         d->copyPad(src, frameData, instanceData, field_n, vsapi);
@@ -1314,11 +1445,11 @@ static const VSFrameRef *VS_CC nnedi3GetFrame(int n, int activationReason, void 
 
         // Clean up.
         for (int plane = 0; plane < d->vi.format->numPlanes; plane++) {
-            VS_ALIGNED_FREE(frameData->paddedp[plane]);
-            VS_ALIGNED_FREE(frameData->lcount[plane]);
+            vs_aligned_free(frameData->paddedp[plane]);
+            vs_aligned_free(frameData->lcount[plane]);
         }
-        VS_ALIGNED_FREE(frameData->input);
-        VS_ALIGNED_FREE(frameData->temp);
+        vs_aligned_free(frameData->input);
+        vs_aligned_free(frameData->temp);
 
         free(frameData);
 
@@ -1336,10 +1467,10 @@ static void VS_CC nnedi3Free(void *instanceData, VSCore *core, const VSAPI *vsap
     nnedi3Data *d = (nnedi3Data *)instanceData;
     vsapi->freeNode(d->node);
 
-    VS_ALIGNED_FREE(d->weights0);
+    vs_aligned_free(d->weights0);
 
     for (int i = 0; i < 2; i++) {
-        VS_ALIGNED_FREE(d->weights1[i]);
+        vs_aligned_free(d->weights1[i]);
     }
 
     free(d);
@@ -1407,9 +1538,13 @@ static void VS_CC nnedi3Create(const VSMap *in, VSMap *out, void *userData, VSCo
     }
 
     d.opt = !!vsapi->propGetInt(in, "opt", 0, &err);
+#ifdef NNEDI3_X86
     if (err) {
         d.opt = 1;
     }
+#else
+    d.opt = 0;
+#endif
 
     d.fapprox = int64ToIntS(vsapi->propGetInt(in, "fapprox", 0, &err));
     if (err) {
@@ -1503,7 +1638,7 @@ static void VS_CC nnedi3Create(const VSMap *in, VSMap *out, void *userData, VSCo
     d.max_value = 65535 >> (16 - d.vi.format->bitsPerSample);
 
 
-    data = malloc(sizeof(d));
+    data = (nnedi3Data *)malloc(sizeof(d));
     *data = d;
 
     vsapi->createFilter(in, out, "nnedi3", nnedi3Init, nnedi3GetFrame, nnedi3Free, fmParallel, 0, data, core);
