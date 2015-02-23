@@ -1350,7 +1350,7 @@ cglobal dotProd_FMA3, 6, 7, 8, data, weights, vals, n, len, istd
    haddps m2, m3
    haddps m0, m2
 
-   movaps [valsq],m6
+   movaps [valsq],m0
    add valsq,16
    sub nq,4
    jnz .nloop
@@ -1412,7 +1412,7 @@ cglobal dotProd_FMA4, 6, 7, 8, data, weights, vals, n, len, istd
    haddps m2, m3
    haddps m0, m2
 
-   movaps [valsq],m6
+   movaps [valsq],m0
    add valsq,16
    sub nq,4
    jnz .nloop
