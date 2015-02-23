@@ -5,7 +5,8 @@ AM_CXXFLAGS = -std=c++11 $(common_cflags)
 
 AM_CPPFLAGS = $(VapourSynth_CFLAGS) -DNNEDI3_DATADIR='"$(pkgdatadir)"'
 
-dist_pkgdata_DATA = src/nnedi3\ weights.bin
+# No spaces allowed. Rename for v4.
+#dist_pkgdata_DATA = src/nnedi3\ weights.bin
 
 lib_LTLIBRARIES = libnnedi3.la
 
@@ -26,3 +27,10 @@ libnnedi3_la_SOURCES += src/asm/cpu-a.asm \
 endif
 
 libnnedi3_la_LDFLAGS = -no-undefined -avoid-version $(PLUGINLDFLAGS)
+
+install-data-local:
+	$(MKDIR_P) $(DESTDIR)/$(pkgdatadir)
+	$(INSTALL_DATA) "$(srcdir)/src/nnedi3 weights.bin" $(DESTDIR)/$(pkgdatadir)
+
+uninstall-local:
+	cd $(DESTDIR)/$(pkgdatadir) && rm -f "nnedi3 weights.bin"
