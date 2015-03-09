@@ -20,12 +20,12 @@
 
 #include <errno.h>
 #include <float.h>
-#include <math.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+#include <cmath>
 #include <string>
 
 #include <VapourSynth.h>
@@ -149,18 +149,18 @@ typedef struct {
 } nnedi3Data;
 
 
-
+template <typename PixelType>
 static void copyPad(const VSFrameRef *src, FrameData *frameData, void **instanceData, int fn, const VSAPI *vsapi) {
     const int off = 1 - fn;
 
     nnedi3Data *d = (nnedi3Data *) * instanceData;
 
     for (int plane = 0; plane < d->vi.format->numPlanes; ++plane) {
-        const uint8_t *srcp = vsapi->getReadPtr(src, plane);
-        uint8_t *dstp = frameData->paddedp[plane];
+        const PixelType *srcp = (const PixelType *)vsapi->getReadPtr(src, plane);
+        PixelType *dstp = (PixelType *)frameData->paddedp[plane];
 
-        const int src_stride = vsapi->getStride(src, plane);
-        const int dst_stride = frameData->padded_stride[plane];
+        const int src_stride = vsapi->getStride(src, plane) / sizeof(PixelType);
+        const int dst_stride = frameData->padded_stride[plane] / sizeof(PixelType);
 
         const int src_height = vsapi->getFrameHeight(src, plane);
         const int dst_height = frameData->padded_height[plane];
@@ -173,13 +173,13 @@ static void copyPad(const VSFrameRef *src, FrameData *frameData, void **instance
             for (int y = off; y < src_height; y += 2) {
                 memcpy(dstp + 32 + (6+y)*dst_stride,
                         srcp + y*src_stride,
-                        src_width);
+                        src_width * sizeof(PixelType));
             }
         } else {
             for (int y = 0; y < src_height; y++) {
                 memcpy(dstp + 32 + (6+y*2+off)*dst_stride,
                         srcp + y*src_stride,
-                        src_width);
+                        src_width * sizeof(PixelType));
             }
         }
 
@@ -196,79 +196,17 @@ static void copyPad(const VSFrameRef *src, FrameData *frameData, void **instance
             dstp += dst_stride*2;
         }
 
-        dstp = frameData->paddedp[plane];
+        dstp = (PixelType *)frameData->paddedp[plane];
         for (int y = off; y < 6; y += 2) {
             memcpy(dstp + y*dst_stride,
                     dstp + (12+2*off-y)*dst_stride,
-                    dst_width);
+                    dst_width * sizeof(PixelType));
         }
         int c = 4;
         for (int y = dst_height - 6 + off; y < dst_height; y += 2, c += 4) {
             memcpy(dstp + y*dst_stride,
                     dstp + (y-c)*dst_stride,
-                    dst_width);
-        }
-    }
-}
-
-
-static void copyPad_uint16(const VSFrameRef *src, FrameData *frameData, void **instanceData, int fn, const VSAPI *vsapi) {
-    const int off = 1 - fn;
-
-    nnedi3Data *d = (nnedi3Data *) * instanceData;
-
-    for (int plane = 0; plane < d->vi.format->numPlanes; ++plane) {
-        const uint16_t *srcp16 = (const uint16_t *)vsapi->getReadPtr(src, plane);
-        uint16_t *dstp16 = (uint16_t *)frameData->paddedp[plane];
-
-        const int src_stride = vsapi->getStride(src, plane) / 2;
-        const int dst_stride = frameData->padded_stride[plane] / 2;
-
-        const int src_height = vsapi->getFrameHeight(src, plane);
-        const int dst_height = frameData->padded_height[plane];
-
-        const int src_width = vsapi->getFrameWidth(src, plane);
-        const int dst_width = frameData->padded_width[plane];
-
-        // Copy.
-        if (!d->dh) {
-            for (int y = off; y < src_height; y += 2) {
-                memcpy(dstp16 + 32 + (6+y)*dst_stride,
-                        srcp16 + y*src_stride,
-                        src_width * 2);
-            }
-        } else {
-            for (int y = 0; y < src_height; y++) {
-                memcpy(dstp16 + 32 + (6+y*2+off)*dst_stride,
-                        srcp16 + y*src_stride,
-                        src_width * 2);
-            }
-        }
-
-        // And pad.
-        dstp16 += (6+off)*dst_stride;
-        for (int y = 6 + off; y < dst_height - 6; y += 2) {
-            for (int x = 0; x < 32; ++x) {
-                dstp16[x] = dstp16[64-x];
-            }
-            int c = 2;
-            for (int x = dst_width - 32; x < dst_width; ++x, c += 2) {
-                dstp16[x] = dstp16[x-c];
-            }
-            dstp16 += dst_stride*2;
-        }
-
-        dstp16 = (uint16_t *)frameData->paddedp[plane];
-        for (int y = off; y < 6; y += 2) {
-            memcpy(dstp16 + y*dst_stride,
-                    dstp16 + (12+2*off-y)*dst_stride,
-                    dst_width * 2);
-        }
-        int c = 4;
-        for (int y = dst_height - 6 + off; y < dst_height; y += 2, c += 4) {
-            memcpy(dstp16 + y*dst_stride,
-                    dstp16 + (y-c)*dst_stride,
-                    dst_width * 2);
+                    dst_width * sizeof(PixelType));
         }
     }
 }
@@ -345,17 +283,10 @@ void computeNetwork0_i16_C(const float *inputf, const float *weightsf, uint8_t *
 }
 
 
-void byte2float48_C(const uint8_t *t, const int pitch, float *p)
+template <typename PixelType>
+void pixel2float48_C(const uint8_t *t8, const int pitch, float *p)
 {
-    for (int y=0; y<4; ++y)
-        for (int x=0; x<12; ++x)
-            p[y*12+x] = t[y*pitch*2+x];
-}
-
-
-void word2float48_C(const uint8_t *t8, const int pitch, float *p)
-{
-    const uint16_t *t = (const uint16_t *)t8;
+    const PixelType *t = (const PixelType *)t8;
 
     for (int y=0; y<4; ++y)
         for (int x=0; x<12; ++x)
@@ -371,9 +302,9 @@ void byte2word48_C(const uint8_t *t, const int pitch, float *pf)
             p[y*12+x] = t[y*pitch*2+x];
 }
 
-#define CB2(n) max(min((n),254),0)
 
 #ifdef NNEDI3_X86
+#define CB2(n) max(min((n),254),0)
 int32_t processLine0_maybeSSE2(const uint8_t *tempu, int width, uint8_t *dstp,
         const uint8_t *src3p, const int src_pitch, const int max_value) {
     int32_t count = 0;
@@ -392,34 +323,16 @@ int32_t processLine0_maybeSSE2(const uint8_t *tempu, int width, uint8_t *dstp,
     }
     return count;
 }
+#undef CB2
 #endif
 
 
-int32_t processLine0_C(const uint8_t *tempu, int width, uint8_t *dstp,
-        const uint8_t *src3p, const int src_pitch, const int max_value)
-{
-    int count = 0;
-    for (int x=0; x<width; ++x)
-    {
-        if (tempu[x])
-            dstp[x] = CB2((19 * (src3p[x+src_pitch*2] + src3p[x+src_pitch*4]) - 3 * (src3p[x] + src3p[x+src_pitch*6]) + 16) / 32);
-        else
-        {
-            dstp[x] = 255;
-            ++count;
-        }
-    }
-    return count;
-}
-
-#undef CB2
-
-
-int32_t processLine0_uint16_C(const uint8_t *tempu, int width, uint8_t *dstp8,
+template <typename PixelType>
+int32_t processLine0_C(const uint8_t *tempu, int width, uint8_t *dstp8,
         const uint8_t *src3p8, const int src_pitch, const int max_value)
 {
-    uint16_t *dstp = (uint16_t *)dstp8;
-    const uint16_t *src3p = (const uint16_t *)src3p8;
+    PixelType *dstp = (PixelType *)dstp8;
+    const PixelType *src3p = (const PixelType *)src3p8;
 
     int count = 0;
     for (int x=0; x<width; ++x)
@@ -428,11 +341,11 @@ int32_t processLine0_uint16_C(const uint8_t *tempu, int width, uint8_t *dstp8,
         {
             int tmp = (19 * (src3p[x+src_pitch*2] + src3p[x+src_pitch*4]) - 3 * (src3p[x] + src3p[x+src_pitch*6]) + 16) / 32;
             dstp[x] = VSMAX(VSMIN(tmp, max_value - 1), 0);
-            // Technically the -1 is only needed for 16 bit input.
+            // Technically the -1 is only needed for 8 and 16 bit input.
         }
         else
         {
-            dstp[x] = 65535;
+            dstp[x] = (1 << (sizeof(PixelType) * 8)) - 1;
             ++count;
         }
     }
@@ -480,6 +393,7 @@ void computeNetwork0new_C(const float *datai, const float *weights, uint8_t *d)
 }
 
 
+template <typename PixelType>
 void evalFunc_0(void **instanceData, FrameData *frameData)
 {
     nnedi3Data *d = (nnedi3Data*) * instanceData;
@@ -493,28 +407,30 @@ void evalFunc_0(void **instanceData, FrameData *frameData)
     for (int b = 0; b < d->vi.format->numPlanes; ++b)
     {
         if ((b == 0 && !d->Y) || 
-                (b == 1 && !d->U) ||
-                (b == 2 && !d->V))
+            (b == 1 && !d->U) ||
+            (b == 2 && !d->V))
             continue;
 
-        const uint8_t *srcp = frameData->paddedp[b];
-        const int src_stride = frameData->padded_stride[b];
+        const PixelType *srcp = (const PixelType *)frameData->paddedp[b];
+        const int src_stride = frameData->padded_stride[b] / sizeof(PixelType);
+
         const int width = frameData->padded_width[b];
         const int height = frameData->padded_height[b];
-        uint8_t *dstp = frameData->dstp[b];
-        const int dst_stride = frameData->dst_stride[b];
+
+        PixelType *dstp = (PixelType *)frameData->dstp[b];
+        const int dst_stride = frameData->dst_stride[b] / sizeof(PixelType);
 
         for (int y = 1 - frameData->field[b]; y < height - 12; y += 2) {
             memcpy(dstp + y*dst_stride,
                     srcp + 32 + (6+y)*src_stride,
-                    width - 64);
+                    (width - 64) * sizeof(PixelType));
         }
 
         const int ystart = 6 + frameData->field[b];
         const int ystop = height - 6;
         srcp += ystart*src_stride;
         dstp += (ystart-6)*dst_stride-32;
-        const uint8_t *src3p = srcp-src_stride*3;
+        const PixelType *src3p = srcp - src_stride*3;
         int32_t *lcount = frameData->lcount[b]-6;
         if (d->pscrn == 1) // original
         {
@@ -522,24 +438,24 @@ void evalFunc_0(void **instanceData, FrameData *frameData)
             {
                 for (int x=32; x<width-32; ++x)
                 {
-                    d->readPixels(src3p+x-5,src_stride,input);
-                    d->computeNetwork0(input,weights0,tempu+x);
+                    d->readPixels((const uint8_t *)(src3p + x - 5), src_stride, input);
+                    d->computeNetwork0(input, weights0, tempu+x);
                 }
-                lcount[y] += d->processLine0(tempu+32,width-64,dstp+32,src3p+32,src_stride, 42); // 42 is the answer
+                lcount[y] += d->processLine0(tempu+32, width-64, (uint8_t *)(dstp + 32), (const uint8_t *)(src3p + 32), src_stride, d->max_value);
                 src3p += src_stride*2;
                 dstp += dst_stride*2;
             }
         }
-        else if (d->pscrn >= 2) // new
+        else if (sizeof(PixelType) == 1 && d->pscrn >= 2) // new
         {
             for (int y=ystart; y<ystop; y+=2)
             {
                 for (int x=32; x<width-32; x+=4)
                 {
-                    d->readPixels(src3p+x-6,src_stride,input);
+                    d->readPixels((const uint8_t *)(src3p+x-6),src_stride,input);
                     d->computeNetwork0(input,weights0,tempu+x);
                 }
-                lcount[y] += d->processLine0(tempu+32,width-64,dstp+32,src3p+32,src_stride, 42);
+                lcount[y] += d->processLine0(tempu+32,width-64,(uint8_t *)(dstp+32),(const uint8_t *)(src3p+32),src_stride, d->max_value);
                 src3p += src_stride*2;
                 dstp += dst_stride*2;
             }
@@ -548,7 +464,7 @@ void evalFunc_0(void **instanceData, FrameData *frameData)
         {
             for (int y=ystart; y<ystop; y+=2)
             {
-                memset(dstp+32,255,width-64);
+                memset(dstp + 32, 255, (width - 64) * sizeof(PixelType));
                 lcount[y] += width-64;
                 dstp += dst_stride*2;
             }
@@ -557,108 +473,18 @@ void evalFunc_0(void **instanceData, FrameData *frameData)
 }
 
 
-void evalFunc_0_uint16(void **instanceData, FrameData *frameData)
-{
-    nnedi3Data *d = (nnedi3Data*) * instanceData;
-
-    float *input = frameData->input;
-    const float *weights0 = d->weights0;
-    float *temp = frameData->temp;
-    uint8_t *tempu = (uint8_t*)temp;
-
-    // And now the actual work.
-    for (int b = 0; b < d->vi.format->numPlanes; ++b)
-    {
-        if ((b == 0 && !d->Y) || 
-                (b == 1 && !d->U) ||
-                (b == 2 && !d->V))
-            continue;
-
-        const uint16_t *srcp16 = (const uint16_t *)frameData->paddedp[b];
-        const int src_stride = frameData->padded_stride[b] / 2;
-
-        const int width = frameData->padded_width[b];
-        const int height = frameData->padded_height[b];
-
-        uint16_t *dstp16 = (uint16_t *)frameData->dstp[b];
-        const int dst_stride = frameData->dst_stride[b] / 2;
-
-        for (int y = 1 - frameData->field[b]; y < height - 12; y += 2) {
-            memcpy(dstp16 + y*dst_stride,
-                    srcp16 + 32 + (6+y)*src_stride,
-                    (width - 64) * 2);
-        }
-
-        const int ystart = 6 + frameData->field[b];
-        const int ystop = height - 6;
-        srcp16 += ystart*src_stride;
-        dstp16 += (ystart-6)*dst_stride-32;
-        const uint16_t *src3p16 = srcp16 - src_stride*3;
-        int32_t *lcount = frameData->lcount[b]-6;
-        if (d->pscrn == 1) // original
-        {
-            for (int y=ystart; y<ystop; y+=2)
-            {
-                for (int x=32; x<width-32; ++x)
-                {
-                    d->readPixels((const uint8_t *)(src3p16 + x - 5), src_stride, input);
-                    d->computeNetwork0(input, weights0, tempu+x);
-                }
-                lcount[y] += d->processLine0(tempu+32, width-64, (uint8_t *)(dstp16 + 32), (const uint8_t *)(src3p16 + 32), src_stride, d->max_value);
-                src3p16 += src_stride*2;
-                dstp16 += dst_stride*2;
-            }
-        }
-        else // no prescreening
-        {
-            for (int y=ystart; y<ystop; y+=2)
-            {
-                memset(dstp16 + 32, 255, (width - 64) * 2);
-                lcount[y] += width-64;
-                dstp16 += dst_stride*2;
-            }
-        }
-    }
-}
-
-
-void extract_m8_C(const uint8_t *srcp, const int stride, 
+template <typename PixelType, typename AccumType, typename FloatType>
+void extract_m8_C(const uint8_t *srcp8, const int stride, 
         const int xdia, const int ydia, float *mstd, float *input)
 {
-    int sum = 0, sumsq = 0;
+    // uint8_t or uint16_t
+    const PixelType *srcp = (const PixelType *)srcp8;
+
+    // int32_t or int64_t
+    AccumType sum = 0, sumsq = 0;
     for (int y=0; y<ydia; ++y)
     {
-        const uint8_t *srcpT = srcp+y*stride*2;
-        for (int x=0; x<xdia; ++x, ++input)
-        {
-            sum += srcpT[x];
-            sumsq += srcpT[x]*srcpT[x];
-            input[0] = srcpT[x];
-        }
-    }
-    const float scale = 1.0f/(float)(xdia*ydia);
-    mstd[0] = sum*scale;
-    mstd[1] = sumsq*scale-mstd[0]*mstd[0];
-    mstd[3] = 0.0f;
-    if (mstd[1] <= FLT_EPSILON)
-        mstd[1] = mstd[2] = 0.0f;
-    else
-    {
-        mstd[1] = sqrtf(mstd[1]);
-        mstd[2] = 1.0f/mstd[1];
-    }
-}
-
-
-void extract_m8_uint16_C(const uint8_t *srcp8, const int stride, 
-        const int xdia, const int ydia, float *mstd, float *input)
-{
-    const uint16_t *srcp = (const uint16_t *)srcp8;
-
-    int64_t sum = 0, sumsq = 0;
-    for (int y=0; y<ydia; ++y)
-    {
-        const uint16_t *srcpT = srcp+y*stride*2;
+        const PixelType *srcpT = srcp+y*stride*2;
         for (int x=0; x<xdia; ++x, ++input)
         {
             sum += srcpT[x];
@@ -668,13 +494,14 @@ void extract_m8_uint16_C(const uint8_t *srcp8, const int stride,
     }
     const float scale = 1.0f/(xdia*ydia);
     mstd[0] = sum*scale;
-    const double tmp = (double)sumsq*scale - (double)mstd[0]*mstd[0];
+    // float or double
+    const FloatType tmp = (FloatType)sumsq*scale - (FloatType)mstd[0]*mstd[0];
     mstd[3] = 0.0f;
     if (tmp <= FLT_EPSILON)
         mstd[1] = mstd[2] = 0.0f;
     else
     {
-        mstd[1] = (float)sqrt(tmp);
+        mstd[1] = (float)std::sqrt(tmp);
         mstd[2] = 1.0f/mstd[1];
     }
 }
@@ -784,6 +611,7 @@ void weightedAvgElliottMul5_m16_C(const float *w, const int n, float *mstd)
 }
 
 
+template <typename PixelType>
 void evalFunc_1(void **instanceData, FrameData *frameData)
 {
     nnedi3Data *d = (nnedi3Data*) * instanceData;
@@ -802,102 +630,45 @@ void evalFunc_1(void **instanceData, FrameData *frameData)
     for (int b = 0; b < d->vi.format->numPlanes; ++b)
     {
         if ((b == 0 && !d->Y) || 
-                (b == 1 && !d->U) ||
-                (b == 2 && !d->V))
+            (b == 1 && !d->U) ||
+            (b == 2 && !d->V))
             continue;
 
-        const uint8_t *srcp = frameData->paddedp[b];
-        const int src_stride = frameData->padded_stride[b];
+        const PixelType *srcp = (const PixelType *)frameData->paddedp[b];
+        const int src_stride = frameData->padded_stride[b] / sizeof(PixelType);
+
         const int width = frameData->padded_width[b];
         const int height = frameData->padded_height[b];
-        uint8_t *dstp = frameData->dstp[b];
-        const int dst_stride = frameData->dst_stride[b];
+
+        PixelType *dstp = (PixelType *)frameData->dstp[b];
+        const int dst_stride = frameData->dst_stride[b] / sizeof(PixelType);
+
         const int ystart = frameData->field[b];
         const int ystop = height - 12;
+
         srcp += (ystart+6)*src_stride;
         dstp += ystart*dst_stride-32;
-        const uint8_t *srcpp = srcp-(ydia-1)*src_stride-xdiad2m1;
-        for (int y=ystart; y<ystop; y+=2)
-        {
-            for (int x=32; x<width-32; ++x)
-            {
-                if (dstp[x] != 255)
-                    continue;
-
-                float mstd[4];
-                d->extract(srcpp+x,src_stride,xdia,ydia,mstd,input);
-                for (int i=0; i<qual; ++i)
-                {
-                    d->dotProd(input,weights1[i],temp,nns*2,asize,mstd+2);
-                    d->expfunc(temp,nns);
-                    d->wae5(temp,nns,mstd);
-                }
-                dstp[x] = min(max((int)(mstd[3]*scale+0.5f),0),255);
-            }
-            srcpp += src_stride*2;
-            dstp += dst_stride*2;
-        }
-    }
-}
-
-
-void evalFunc_1_uint16(void **instanceData, FrameData *frameData)
-{
-    nnedi3Data *d = (nnedi3Data*) * instanceData;
-
-    float *input = frameData->input;
-    float *temp = frameData->temp;
-    float **weights1 = d->weights1;
-    const int qual = d->qual;
-    const int asize = d->asize;
-    const int nns = d->nns;
-    const int xdia = d->xdia;
-    const int xdiad2m1 = (xdia / 2) - 1;
-    const int ydia = d->ydia;
-    const float scale = 1.0f/(float)qual;
-
-    for (int b = 0; b < d->vi.format->numPlanes; ++b)
-    {
-        if ((b == 0 && !d->Y) || 
-                (b == 1 && !d->U) ||
-                (b == 2 && !d->V))
-            continue;
-
-        const uint16_t *srcp16 = (const uint16_t *)frameData->paddedp[b];
-        const int src_stride = frameData->padded_stride[b] / 2;
-
-        const int width = frameData->padded_width[b];
-        const int height = frameData->padded_height[b];
-
-        uint16_t *dstp16 = (uint16_t *)frameData->dstp[b];
-        const int dst_stride = frameData->dst_stride[b] / 2;
-
-        const int ystart = frameData->field[b];
-        const int ystop = height - 12;
-
-        srcp16 += (ystart+6)*src_stride;
-        dstp16 += ystart*dst_stride-32;
-        const uint16_t *srcpp16 = srcp16 - (ydia-1)*src_stride - xdiad2m1;
+        const PixelType *srcpp = srcp - (ydia-1)*src_stride - xdiad2m1;
 
         for (int y=ystart; y<ystop; y+=2)
         {
             for (int x=32; x<width-32; ++x)
             {
-                if (dstp16[x] != 65535)
+                if (dstp[x] != ((1 << (sizeof(PixelType) * 8)) - 1))
                     continue;
 
                 float mstd[4];
-                d->extract((const uint8_t *)(srcpp16 + x), src_stride, xdia, ydia, mstd, input);
+                d->extract((const uint8_t *)(srcpp + x), src_stride, xdia, ydia, mstd, input);
                 for (int i=0; i<qual; ++i)
                 {
                     d->dotProd(input, weights1[i], temp, nns*2, asize, mstd+2);
                     d->expfunc(temp, nns);
                     d->wae5(temp, nns, mstd);
                 }
-                dstp16[x] = VSMIN(VSMAX((int)(mstd[3]*scale+0.5f), 0), d->max_value);
+                dstp[x] = VSMIN(VSMAX((int)(mstd[3]*scale+0.5f), 0), d->max_value);
             }
-            srcpp16 += src_stride*2;
-            dstp16 += dst_stride*2;
+            srcpp += src_stride*2;
+            dstp += dst_stride*2;
         }
     }
 }
@@ -940,19 +711,19 @@ static void selectFunctions(nnedi3Data *d) {
 #endif
 
     if (d->vi.format->bitsPerSample == 8) {
-        d->copyPad = copyPad;
-        d->evalFunc_0 = evalFunc_0;
-        d->evalFunc_1 = evalFunc_1;
+        d->copyPad = copyPad<uint8_t>;
+        d->evalFunc_0 = evalFunc_0<uint8_t>;
+        d->evalFunc_1 = evalFunc_1<uint8_t>;
 
         // evalFunc_0
-        d->processLine0 = processLine0_C;
+        d->processLine0 = processLine0_C<uint8_t>;
 
         if (d->pscrn < 2) { // original prescreener
             if (d->fapprox & 1) { // int16 dot products
                 d->readPixels = byte2word48_C;
                 d->computeNetwork0 = computeNetwork0_i16_C;
             } else {
-                d->readPixels = byte2float48_C;
+                d->readPixels = pixel2float48_C<uint8_t>;
                 d->computeNetwork0 = computeNetwork0_C;
             }
         } else { // new prescreener
@@ -968,7 +739,7 @@ static void selectFunctions(nnedi3Data *d) {
             d->extract = extract_m8_i16_C;
             d->dotProd = dotProdS_C;
         } else { // use float dot products
-            d->extract = extract_m8_C;
+            d->extract = extract_m8_C<uint8_t, int32_t, float>;
             d->dotProd = dotProd_C;
         }
 
@@ -1032,20 +803,20 @@ static void selectFunctions(nnedi3Data *d) {
         }
 #endif
     } else {
-        d->copyPad = copyPad_uint16;
-        d->evalFunc_0 = evalFunc_0_uint16;
-        d->evalFunc_1 = evalFunc_1_uint16;
+        d->copyPad = copyPad<uint16_t>;
+        d->evalFunc_0 = evalFunc_0<uint16_t>;
+        d->evalFunc_1 = evalFunc_1<uint16_t>;
 
         // evalFunc_0
-        d->processLine0 = processLine0_uint16_C;
+        d->processLine0 = processLine0_C<uint16_t>;
 
-        d->readPixels = word2float48_C;
+        d->readPixels = pixel2float48_C<uint16_t>;
         d->computeNetwork0 = computeNetwork0_C;
 
         // evalFunc_1
         d->wae5 = weightedAvgElliottMul5_m16_C;
 
-        d->extract = extract_m8_uint16_C;
+        d->extract = extract_m8_C<uint16_t, int64_t, double>;
         d->dotProd = dotProd_C;
 
         if ((d->fapprox & 12) == 0) { // use slow exp
