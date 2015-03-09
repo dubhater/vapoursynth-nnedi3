@@ -867,7 +867,7 @@ static void VS_CC nnedi3Init(VSMap *in, VSMap *out, void **instanceData, VSNode 
     nnedi3Data *d = (nnedi3Data *) * instanceData;
     vsapi->setVideoInfo(&d->vi, 1, node);
 
-    std::string weights_name("nnedi3 weights.bin");
+    std::string weights_name("nnedi3_weights.bin");
 
     VSPlugin *nnedi3Plugin = vsapi->getPluginById("com.deinterlace.nnedi3", core);
     std::string plugin_path(vsapi->getPluginPath(nnedi3Plugin));
