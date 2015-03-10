@@ -55,36 +55,36 @@ static std::wstring utf16_from_bytes(const std::string &str) {
 #ifdef NNEDI3_X86
 // Functions implemented in nnedi3.asm
 extern "C" {
-extern void nnedi3_byte2float48_SSE2(const uint8_t *t, const int pitch, float *p);
-extern void nnedi3_word2float48_SSE2(const uint8_t *t, const int pitch, float *pf);
-extern void nnedi3_byte2word48_SSE2(const uint8_t *t, const int pitch, float *pf);
-extern void nnedi3_byte2word64_SSE2(const uint8_t *t, const int pitch, float *p);
+    extern void nnedi3_byte2float48_SSE2(const uint8_t *t, const int pitch, float *p);
+    extern void nnedi3_word2float48_SSE2(const uint8_t *t, const int pitch, float *pf);
+    extern void nnedi3_byte2word48_SSE2(const uint8_t *t, const int pitch, float *pf);
+    extern void nnedi3_byte2word64_SSE2(const uint8_t *t, const int pitch, float *p);
 
-extern int32_t nnedi3_processLine0_SSE2(const uint8_t *tempu, int width, uint8_t *dstp, const uint8_t *src3p, const int src_pitch);
+    extern int32_t nnedi3_processLine0_SSE2(const uint8_t *tempu, int width, uint8_t *dstp, const uint8_t *src3p, const int src_pitch);
 
-extern void nnedi3_extract_m8_SSE2(const uint8_t *srcp, const int stride, const int xdia, const int ydia, float *mstd, float *input);
-extern void nnedi3_extract_m8_i16_SSE2(const uint8_t *srcp, const int stride, const int xdia, const int ydia, float *mstd, float *inputf);
+    extern void nnedi3_extract_m8_SSE2(const uint8_t *srcp, const int stride, const int xdia, const int ydia, float *mstd, float *input);
+    extern void nnedi3_extract_m8_i16_SSE2(const uint8_t *srcp, const int stride, const int xdia, const int ydia, float *mstd, float *inputf);
 
-extern void nnedi3_computeNetwork0_SSE2(const float *input, const float *weights, uint8_t *d);
-extern void nnedi3_computeNetwork0_i16_SSE2(const float *inputf, const float *weightsf, uint8_t *d);
-extern void nnedi3_computeNetwork0new_SSE2(const float *datai, const float *weights, uint8_t *d);
+    extern void nnedi3_computeNetwork0_SSE2(const float *input, const float *weights, uint8_t *d);
+    extern void nnedi3_computeNetwork0_i16_SSE2(const float *inputf, const float *weightsf, uint8_t *d);
+    extern void nnedi3_computeNetwork0new_SSE2(const float *datai, const float *weights, uint8_t *d);
 
-extern void nnedi3_weightedAvgElliottMul5_m16_SSE2(const float *w, const int n, float *mstd);
+    extern void nnedi3_weightedAvgElliottMul5_m16_SSE2(const float *w, const int n, float *mstd);
 
-extern void nnedi3_e0_m16_SSE2(float *s, const int n);
-extern void nnedi3_e1_m16_SSE2(float *s, const int n);
-extern void nnedi3_e2_m16_SSE2(float *s, const int n);
+    extern void nnedi3_e0_m16_SSE2(float *s, const int n);
+    extern void nnedi3_e1_m16_SSE2(float *s, const int n);
+    extern void nnedi3_e2_m16_SSE2(float *s, const int n);
 
-extern void nnedi3_dotProd_SSE2(const float *data, const float *weights, float *vals, const int n, const int len, const float *istd);
-extern void nnedi3_dotProd_i16_SSE2(const float *dataf, const float *weightsf, float *vals, const int n, const int len, const float *istd);
+    extern void nnedi3_dotProd_SSE2(const float *data, const float *weights, float *vals, const int n, const int len, const float *istd);
+    extern void nnedi3_dotProd_i16_SSE2(const float *dataf, const float *weightsf, float *vals, const int n, const int len, const float *istd);
 
-extern void nnedi3_computeNetwork0_FMA3(const float *input, const float *weights, uint8_t *d);
-extern void nnedi3_e0_m16_FMA3(float *s, const int n);
-extern void nnedi3_dotProd_FMA3(const float *data, const float *weights, float *vals, const int n, const int len, const float *istd);
+    extern void nnedi3_computeNetwork0_FMA3(const float *input, const float *weights, uint8_t *d);
+    extern void nnedi3_e0_m16_FMA3(float *s, const int n);
+    extern void nnedi3_dotProd_FMA3(const float *data, const float *weights, float *vals, const int n, const int len, const float *istd);
 
-extern void nnedi3_computeNetwork0_FMA4(const float *input, const float *weights, uint8_t *d);
-extern void nnedi3_e0_m16_FMA4(float *s, const int n);
-extern void nnedi3_dotProd_FMA4(const float *data, const float *weights, float *vals, const int n, const int len, const float *istd);
+    extern void nnedi3_computeNetwork0_FMA4(const float *input, const float *weights, uint8_t *d);
+    extern void nnedi3_e0_m16_FMA4(float *s, const int n);
+    extern void nnedi3_dotProd_FMA4(const float *data, const float *weights, float *vals, const int n, const int len, const float *istd);
 }
 #endif
 
@@ -1664,30 +1664,34 @@ static void VS_CC nnedi3_rpow2Create(const VSMap *in, VSMap *out, void *userData
 
 VS_EXTERNAL_API(void) VapourSynthPluginInit(VSConfigPlugin configFunc, VSRegisterFunction registerFunc, VSPlugin *plugin) {
     configFunc("com.deinterlace.nnedi3", "nnedi3", "Neural network edge directed interpolation", VAPOURSYNTH_API_VERSION, 1, plugin);
-    registerFunc("nnedi3", "clip:clip;"
-                           "field:int;"
-                           "dh:int:opt;"
-                           "Y:int:opt;"
-                           "U:int:opt;"
-                           "V:int:opt;"
-                           "nsize:int:opt;"
-                           "nns:int:opt;"
-                           "qual:int:opt;"
-                           "etype:int:opt;"
-                           "pscrn:int:opt;"
-                           "opt:int:opt;"
-                           "fapprox:int:opt;", nnedi3Create, 0, plugin);
-    registerFunc("nnedi3_rpow2", "clip:clip;"
-                                 "rfactor:int;"
-                                 "width:int:opt;"
-                                 "height:int:opt;"
-                                 "correct_shift:int:opt;"
-                                 "nsize:int:opt;"
-                                 "nns:int:opt;"
-                                 "qual:int:opt;"
-                                 "etype:int:opt;"
-                                 "pscrn:int:opt;"
-                                 "opt:int:opt;"
-                                 "fapprox:int:opt;", nnedi3_rpow2Create, 0, plugin);
+    registerFunc("nnedi3",
+            "clip:clip;"
+            "field:int;"
+            "dh:int:opt;"
+            "Y:int:opt;"
+            "U:int:opt;"
+            "V:int:opt;"
+            "nsize:int:opt;"
+            "nns:int:opt;"
+            "qual:int:opt;"
+            "etype:int:opt;"
+            "pscrn:int:opt;"
+            "opt:int:opt;"
+            "fapprox:int:opt;"
+            , nnedi3Create, 0, plugin);
+    registerFunc("nnedi3_rpow2",
+            "clip:clip;"
+            "rfactor:int;"
+            "width:int:opt;"
+            "height:int:opt;"
+            "correct_shift:int:opt;"
+            "nsize:int:opt;"
+            "nns:int:opt;"
+            "qual:int:opt;"
+            "etype:int:opt;"
+            "pscrn:int:opt;"
+            "opt:int:opt;"
+            "fapprox:int:opt;"
+            , nnedi3_rpow2Create, 0, plugin);
 }
 
