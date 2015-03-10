@@ -1226,7 +1226,18 @@ static const VSFrameRef *VS_CC nnedi3GetFrame(int n, int activationReason, void 
 
         vsapi->freeFrame(src);
 
-        // And then return dst.
+        if (d->field > 1) {
+            VSMap *props = vsapi->getFramePropsRW(dst);
+            int err_num, err_den;
+            int64_t duration_num = vsapi->propGetInt(props, "_DurationNum", 0, &err_num);
+            int64_t duration_den = vsapi->propGetInt(props, "_DurationDen", 0, &err_den);
+            if (!err_num && !err_den) {
+                muldivRational(&duration_num, &duration_den, 1, 2); // Divide duration by 2.
+                vsapi->propSetInt(props, "_DurationNum", duration_num, paReplace);
+                vsapi->propSetInt(props, "_DurationDen", duration_den, paReplace);
+            }
+        }
+
         return dst;
     }
 
