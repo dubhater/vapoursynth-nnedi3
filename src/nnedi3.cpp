@@ -1189,7 +1189,7 @@ static const VSFrameRef *VS_CC nnedi3GetFrame(int n, int activationReason, void 
             frameData->padded_width[plane]  = dst_width + 64;
             frameData->padded_height[plane] = dst_height + 12;
             frameData->padded_stride[plane] = modnpf(frameData->padded_width[plane] * d->vi.format->bytesPerSample + min_pad, min_alignment); // TODO: maybe min_pad is in pixels too?
-            frameData->paddedp[plane] = vs_aligned_malloc<uint8_t>(frameData->padded_stride[plane] * frameData->padded_height[plane], min_alignment);
+            frameData->paddedp[plane] = vs_aligned_malloc<uint8_t>((size_t)frameData->padded_stride[plane] * (size_t)frameData->padded_height[plane], min_alignment);
 
             frameData->dstp[plane] = vsapi->getWritePtr(dst, plane);
             frameData->dst_stride[plane] = vsapi->getStride(dst, plane);
