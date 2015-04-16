@@ -1201,7 +1201,10 @@ static const VSFrameRef *VS_CC nnedi3GetFrame(int n, int activationReason, void 
         }
 
         frameData->input = vs_aligned_malloc<float>(512 * sizeof(float), 16);
-        frameData->temp = vs_aligned_malloc<float>(2048 * sizeof(float), 16);
+        // evalFunc_0 requires at least padded_width[0] bytes.
+        // evalFunc_1 requires at least 512 floats.
+        size_t temp_size = max((size_t)frameData->padded_width[0], 512 * sizeof(float));
+        frameData->temp = vs_aligned_malloc<float>(temp_size, 16);
 
         // Copy src to a padded "frame" in frameData and mirror the edges.
         d->copyPad(src, frameData, instanceData, field_n, vsapi);
