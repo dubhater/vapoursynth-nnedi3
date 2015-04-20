@@ -1163,18 +1163,31 @@ static const VSFrameRef *VS_CC nnedi3GetFrame(int n, int activationReason, void 
     if (activationReason == arInitial) {
         vsapi->requestFrameFilter(d->field > 1 ? n / 2 : n, d->node, frameCtx);
     } else if (activationReason == arAllFramesReady) {
+        const VSFrameRef *src = vsapi->getFrameFilter(d->field > 1 ? n / 2 : n, d->node, frameCtx);
+
+        int err;
+        const VSMap *src_props = vsapi->getFramePropsRO(src);
+        int fieldbased = int64ToIntS(vsapi->propGetInt(src_props, "_FieldBased", 0, &err));
+        int effective_field = d->field;
+        if (effective_field > 1)
+            effective_field -= 2;
+
+        if (fieldbased == 1)
+            effective_field = 0;
+        else if (fieldbased == 2)
+            effective_field = 1;
+
         int field_n;
         if (d->field > 1) {
             if (n & 1) {
-                field_n = d->field == 3 ? 0 : 1;
+                field_n = (effective_field == 0);
             } else {
-                field_n = d->field == 3 ? 1 : 0;
+                field_n = (effective_field == 1);
             }
         } else {
-            field_n = d->field;
+            field_n = effective_field;
         }
 
-        const VSFrameRef *src = vsapi->getFrameFilter(d->field > 1 ? n / 2 : n, d->node, frameCtx);
         VSFrameRef *dst = vsapi->newVideoFrame(d->vi.format, d->vi.width, d->vi.height, src, core);
 
 
@@ -1231,14 +1244,14 @@ static const VSFrameRef *VS_CC nnedi3GetFrame(int n, int activationReason, void 
         vsapi->freeFrame(src);
 
         if (d->field > 1) {
-            VSMap *props = vsapi->getFramePropsRW(dst);
+            VSMap *dst_props = vsapi->getFramePropsRW(dst);
             int err_num, err_den;
-            int64_t duration_num = vsapi->propGetInt(props, "_DurationNum", 0, &err_num);
-            int64_t duration_den = vsapi->propGetInt(props, "_DurationDen", 0, &err_den);
+            int64_t duration_num = vsapi->propGetInt(dst_props, "_DurationNum", 0, &err_num);
+            int64_t duration_den = vsapi->propGetInt(dst_props, "_DurationDen", 0, &err_den);
             if (!err_num && !err_den) {
                 muldivRational(&duration_num, &duration_den, 1, 2); // Divide duration by 2.
-                vsapi->propSetInt(props, "_DurationNum", duration_num, paReplace);
-                vsapi->propSetInt(props, "_DurationDen", duration_den, paReplace);
+                vsapi->propSetInt(dst_props, "_DurationNum", duration_num, paReplace);
+                vsapi->propSetInt(dst_props, "_DurationDen", duration_den, paReplace);
             }
         }
 

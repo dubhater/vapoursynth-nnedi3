@@ -32,6 +32,8 @@ When the input clip has more than 8 bits per sample, some parameters' allowed an
 
 The opt parameter is now a boolean. If False, only C functions will be used. If True, the best functions that can run on your CPU will be selected automatically.
 
+The ``_FieldBased`` frame property is now used to determine each frame's field dominance. The *field* parameter is only a fallback for frames that don't have the ``_FieldBased`` property, or where said property indicates that the frame is progressive.
+
 ::
 
    nnedi3.nnedi3_rpow2(clip clip, int rfactor[, int width=clip.width*rfactor, int height=clip.height*rfactor, bint correct_shift=1, int nsize=0, int nns=3, int qual=1, int etype=0, int pscrn=2, bint opt=True, int fapprox=15])
