@@ -20,6 +20,7 @@
 
 #include <cerrno>
 #include <cfloat>
+#include <climits>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -1412,6 +1413,12 @@ static void VS_CC nnedi3Create(const VSMap *in, VSMap *out, void *userData, VSCo
 
     // Changing the video info probably has to be done before createFilter.
     if (d.field > 1) {
+        if (d.vi.numFrames > INT_MAX / 2) {
+            vsapi->setError(out, "nnedi3: output clip would be too long");
+            vsapi->freeNode(d.node);
+            return;
+        }
+
         d.vi.numFrames *= 2;
         d.vi.fpsNum *= 2;
     }
