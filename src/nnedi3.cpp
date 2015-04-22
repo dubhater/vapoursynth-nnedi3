@@ -1433,7 +1433,7 @@ static void VS_CC nnedi3Create(const VSMap *in, VSMap *out, void *userData, VSCo
         }
 
         d.vi.numFrames *= 2;
-        d.vi.fpsNum *= 2;
+        muldivRational(&d.vi.fpsNum, &d.vi.fpsDen, 2, 1);
     }
 
     if (d.dh) {
