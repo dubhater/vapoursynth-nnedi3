@@ -324,7 +324,6 @@ cglobal processLine0_SSE2, 5, 6, 8, tempu, width, dstp, src3p, src_pitch
 ; const float *w, const int n, float *mstd
 INIT_XMM
 cglobal weightedAvgElliottMul5_m16_SSE2, 3, 5, 8, w, n, mstd
-   ;push edi ; why?
    lea r3,[wq+nq*4]
    xor r4,r4
    xorps m0,m0 ; sum w
@@ -394,7 +393,6 @@ cglobal weightedAvgElliottMul5_m16_SSE2, 3, 5, 8, w, n, mstd
    addss m1,[mstdq]
    addss m1,[mstdq+12]
    movss [mstdq+12],m1
-   ;pop edi
    RET
 
 
@@ -442,7 +440,6 @@ cglobal extract_m8_i16_SSE2, 6, 7, 8, srcp, stride, xdia, ydia, mstd, inputf
 
    movhlps m1,m5
    paddd m5,m1
-   ; multiply ydia by xdia
    movd m2,xdiad
    movd m3,ydiad
    pmuludq m2,m3
@@ -482,8 +479,6 @@ cglobal extract_m8_i16_SSE2, 6, 7, 8, srcp, stride, xdia, ydia, mstd, inputf
 ;  const int n
 INIT_XMM
 cglobal e0_m16_SSE2, 2, 2, 4
-   ;mov r0,[esp+4]
-   ;mov r1,[esp+8]
 .eloop16:
    movaps m0,[r0]
    minps m0,[exp_hi]
@@ -504,8 +499,6 @@ cglobal e0_m16_SSE2, 2, 2, 4
 ;  const int n
 INIT_XMM
 cglobal e0_m16_FMA3, 2, 2, 4
-   ;mov r0,[esp+4]
-   ;mov r1,[esp+8]
    movaps m1, [e0_mult]
 .eloop16:
    movaps m0,[r0]
@@ -526,8 +519,6 @@ cglobal e0_m16_FMA3, 2, 2, 4
 ;  const int n
 INIT_XMM
 cglobal e0_m16_FMA4, 2, 2, 4
-   ;mov r0,[esp+4]
-   ;mov r1,[esp+8]
    movaps m1, [e0_mult]
 .eloop16:
    movaps m0,[r0]
@@ -552,8 +543,6 @@ cglobal e0_m16_FMA4, 2, 2, 4
 INIT_XMM
 cglobal computeNetwork0_SSE2, 3, 5, 8, input, weights, d
    ;//    dotProd48_m4_SSE(input,weights,temp,4);
-   ;mov r0,[esp+4]
-   ;mov r1,[esp+8]
    mov r3,1
 
    xorps m0, m0
@@ -650,7 +639,6 @@ cglobal computeNetwork0_SSE2, 3, 5, 8, input, weights, d
    addps m0,m2
    addps m4,m6
    addps m0,m4
-   ;mov ecx/r2,[esp+12]
    addps m0,[weightsq+864+128]
    movhlps m1,m0
    maxps m0,m1
@@ -670,8 +658,6 @@ cglobal computeNetwork0_SSE2, 3, 5, 8, input, weights, d
 INIT_XMM
 cglobal computeNetwork0_FMA3, 3, 5, 8, input, weights, d
    ;//    dotProd48_m4_SSE(input,weights,temp,4);
-   ;mov r0,[esp+4]
-   ;mov r1,[esp+8]
    mov r3,1
 
    xorps m0, m0
@@ -746,7 +732,6 @@ cglobal computeNetwork0_FMA3, 3, 5, 8, input, weights, d
    addps m0,m2
    addps m4,m6
    addps m0,m4
-   ;mov ecx/r2,[esp+12]
    addps m0,[weightsq+864+128]
    movhlps m1,m0
    maxps m0,m1
@@ -766,8 +751,6 @@ cglobal computeNetwork0_FMA3, 3, 5, 8, input, weights, d
 INIT_XMM
 cglobal computeNetwork0_FMA4, 3, 5, 8, input, weights, d
    ;//    dotProd48_m4_SSE(input,weights,temp,4);
-   ;mov r0,[esp+4]
-   ;mov r1,[esp+8]
    mov r3,1
 
    xorps m0, m0
@@ -842,7 +825,6 @@ cglobal computeNetwork0_FMA4, 3, 5, 8, input, weights, d
    addps m0,m2
    addps m4,m6
    addps m0,m4
-   ;mov ecx/r2,[esp+12]
    addps m0,[weightsq+864+128]
    movhlps m1,m0
    maxps m0,m1
@@ -1272,7 +1254,7 @@ cglobal dotProd_SSE2, 6, 7, 8, data, weights, vals, n, len, istd
    sub lend,4
    jnz .lloop
 
-   ; This block performs a horizontal sum of each accumulator (m0..m3) and packs the results in m0 (sum(m3) sum(m2) sum(m1) sum(m0)).
+   ; This block performs a horizontal sum of each accumulator (m0..m3) and packs the results in m6 (sum(m3) sum(m2) sum(m1) sum(m0)).
    ; Sadly replacing the twelve instructions with three haddps makes no difference whatsoever on this Core 2 Duo.
    movaps m4,m0
    movaps m5,m2
