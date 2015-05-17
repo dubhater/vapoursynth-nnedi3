@@ -23,7 +23,7 @@ typedef struct CPUFeatures {
     // This is to determine if the cpu is up to the minimum requirements in terms of supported instructions
     // that the VapourSynth core uses.
     char can_run_vs;
-#ifdef NNEDI3_X86
+#if defined(NNEDI3_X86)
     // On x86, all features up to sse2 are required.
     char sse3;
     char ssse3;
@@ -41,7 +41,7 @@ typedef struct CPUFeatures {
     char neon;
     char fast_mult;
     char idiv_a;
-#elif defined(NNEDI3_POWERPC)
+#elif defined(NNEDI3_PPC)
     // On PowerPC, FPU and MMU are required.
     char altivec;
     char spe;

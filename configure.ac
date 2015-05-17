@@ -72,7 +72,7 @@ AS_IF(
 
 AS_IF(
       [test "x$PPC" = "xtrue"],
-      [AC_DEFINE([NNEDI3_POWERPC])]
+      [AC_DEFINE([NNEDI3_PPC])]
 )
 
 AS_IF(
@@ -84,6 +84,8 @@ AC_SUBST([ASFLAGS])
 
 
 AM_CONDITIONAL([NNEDI3_X86], [test "x$X86" = "xtrue"])
+AM_CONDITIONAL([NNEDI3_ARM], [test "x$ARM" = "xtrue"])
+AM_CONDITIONAL([NNEDI3_PPC], [test "x$PPC" = "xtrue"])
 
 
 PKG_CHECK_MODULES([VapourSynth], [vapoursynth])

@@ -74,14 +74,14 @@ void getCPUFeatures(CPUFeatures *cpuFeatures) {
 
     cpuFeatures->can_run_vs = 1;
 
-#ifdef NNEDI3_ARM
+#if defined(NNEDI3_ARM)
     cpuFeatures->half_fp = !!(hwcap & HWCAP_ARM_HALF);
     cpuFeatures->edsp = !!(hwcap & HWCAP_ARM_EDSP);
     cpuFeatures->iwmmxt = !!(hwcap & HWCAP_ARM_IWMMXT);
     cpuFeatures->neon = !!(hwcap & HWCAP_ARM_NEON);
     cpuFeatures->fast_mult = !!(hwcap & HWCAP_ARM_FAST_MULT);
     cpuFeatures->idiv_a = !!(hwcap & HWCAP_ARM_IDIVA);
-#elif defined(NNEDI3_POWERPC)
+#elif defined(NNEDI3_PPC)
     cpuFeatures->altivec = !!(hwcap & PPC_FEATURE_HAS_ALTIVEC);
     cpuFeatures->spe = !!(hwcap & PPC_FEATURE_HAS_SPE);
     cpuFeatures->efp_single = !!(hwcap & PPC_FEATURE_HAS_EFP_SINGLE);
