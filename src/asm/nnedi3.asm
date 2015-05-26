@@ -192,21 +192,21 @@ cglobal computeNetwork0new_SSE2, 3, 4, 8, datai, weights, d
    mova m4,m0
    mova m5,m2
    
-   punpcklqdq m0,m1
-   punpcklqdq m2,m3
+   punpcklqdq m0,m1 ; m0 = m1[1] m1[0] m0[1] m0[0]
+   punpcklqdq m2,m3 ; m2 = m3[1] m3[0] m2[1] m2[0]
    
-   punpckhqdq m4,m1
-   punpckhqdq m5,m3
+   punpckhqdq m4,m1 ; m4 = m1[3] m1[2] m0[3] m0[2]
+   punpckhqdq m5,m3 ; m5 = m3[3] m3[2] m2[3] m2[2]
    
-   paddd m0,m4
-   paddd m2,m5
+   paddd m0,m4 ; m0 = m1[1]+m1[3] m1[0]+m1[2] m0[1]+m0[3] m0[0]+m0[2]
+   paddd m2,m5 ; m2 = m3[1]+m3[3] m3[0]+m3[2] m2[1]+m2[3] m2[0]+m2[2]
    
    mova m6,m0
    
-   shufps m0,m2,136
-   shufps m6,m2,221
+   shufps m0,m2,136 ; m0 = m3[0]+m3[2] m2[0]+m2[2] m1[0]+m1[2] m0[0]+m0[2]
+   shufps m6,m2,221 ; m6 = m3[1]+m3[3] m2[1]+m2[3] m1[1]+m1[3] m0[1]+m0[3]
    
-   paddd m0,m6
+   paddd m0,m6 ; m0 = sum(m3) sum(m2) sum(m1) sum(m0)
    cvtdq2ps m0,m0
    mulps m0,[weightsq+512]
    addps m0,[weightsq+528]
