@@ -28,6 +28,7 @@
 #include <cstring>
 
 #include <string>
+#include <type_traits>
 
 #include <VapourSynth.h>
 #include <VSHelper.h>
@@ -155,7 +156,7 @@ typedef struct {
     // Functions used in evalFunc_0
     void (*readPixels)(const uint8_t*, const int, float*);
     void (*computeNetwork0)(const float*, const float*, uint8_t *);
-    int32_t (*processLine0)(const uint8_t*, int, uint8_t*, const uint8_t*, const int, const int);
+    int32_t (*processLine0)(const uint8_t*, int, uint8_t*, const uint8_t*, const int, const int, const int);
 
     // Functions used in evalFunc_1
     void (*extract)(const uint8_t*, const int, const int, const int, float*, float*);
@@ -322,7 +323,7 @@ void byte2word48_C(const uint8_t *t, const int pitch, float *pf)
 #ifdef NNEDI3_X86
 #define CB2(n) max(min((n),254),0)
 int32_t processLine0_maybeSSE2(const uint8_t *tempu, int width, uint8_t *dstp,
-        const uint8_t *src3p, const int src_pitch, const int max_value) {
+        const uint8_t *src3p, const int src_pitch, const int max_value, const int) {
     int32_t count = 0;
     const int remain = width & 15;
     width -= remain;
@@ -343,25 +344,43 @@ int32_t processLine0_maybeSSE2(const uint8_t *tempu, int width, uint8_t *dstp,
 #endif
 
 
-template <typename PixelType>
+// PixelType can be uint8_t, uint16_t, or float.
+// TempType can be int or float.
+template <typename PixelType, typename TempType>
 int32_t processLine0_C(const uint8_t *tempu, int width, uint8_t *dstp8,
-        const uint8_t *src3p8, const int src_pitch, const int max_value)
+        const uint8_t *src3p8, const int src_pitch, const int max_value, const int chroma)
 {
     PixelType *dstp = (PixelType *)dstp8;
     const PixelType *src3p = (const PixelType *)src3p8;
+
+    TempType minimum = 0;
+    TempType maximum = max_value - 1;
+    // Technically the -1 is only needed for 8 and 16 bit input.
+
+    if (std::is_same<PixelType, float>::value) {
+        if (chroma) {
+            minimum = -0.5f;
+            maximum = 0.5f;
+        } else {
+            minimum = 0.0f;
+            maximum = 1.0f;
+        }
+    }
 
     int count = 0;
     for (int x=0; x<width; ++x)
     {
         if (tempu[x])
         {
-            int tmp = (19 * (src3p[x+src_pitch*2] + src3p[x+src_pitch*4]) - 3 * (src3p[x] + src3p[x+src_pitch*6]) + 16) / 32;
-            dstp[x] = VSMAX(VSMIN(tmp, max_value - 1), 0);
-            // Technically the -1 is only needed for 8 and 16 bit input.
+            TempType tmp = 19 * (src3p[x+src_pitch*2] + src3p[x+src_pitch*4]) - 3 * (src3p[x] + src3p[x+src_pitch*6]);
+            if (!std::is_same<TempType, float>::value)
+                tmp += 16;
+            tmp /= 32;
+            dstp[x] = VSMAX(VSMIN(tmp, maximum), minimum);
         }
         else
         {
-            dstp[x] = (1 << (sizeof(PixelType) * 8)) - 1;
+            memset(dstp + x, 255, sizeof(PixelType));
             ++count;
         }
     }
@@ -457,7 +476,7 @@ void evalFunc_0(void **instanceData, FrameData *frameData)
                     d->readPixels((const uint8_t *)(src3p + x - 5), src_stride, input);
                     d->computeNetwork0(input, weights0, tempu+x);
                 }
-                lcount[y] += d->processLine0(tempu+32, width-64, (uint8_t *)(dstp + 32), (const uint8_t *)(src3p + 32), src_stride, d->max_value);
+                lcount[y] += d->processLine0(tempu+32, width-64, (uint8_t *)(dstp + 32), (const uint8_t *)(src3p + 32), src_stride, d->max_value, b && d->vi.format->colorFamily != cmRGB);
                 src3p += src_stride*2;
                 dstp += dst_stride*2;
             }
@@ -471,7 +490,7 @@ void evalFunc_0(void **instanceData, FrameData *frameData)
                     d->readPixels((const uint8_t *)(src3p+x-6),src_stride,input);
                     d->computeNetwork0(input,weights0,tempu+x);
                 }
-                lcount[y] += d->processLine0(tempu+32,width-64,(uint8_t *)(dstp+32),(const uint8_t *)(src3p+32),src_stride, d->max_value);
+                lcount[y] += d->processLine0(tempu+32,width-64,(uint8_t *)(dstp+32),(const uint8_t *)(src3p+32),src_stride, d->max_value, b && d->vi.format->colorFamily != cmRGB);
                 src3p += src_stride*2;
                 dstp += dst_stride*2;
             }
@@ -493,10 +512,10 @@ template <typename PixelType, typename AccumType, typename FloatType>
 void extract_m8_C(const uint8_t *srcp8, const int stride, 
         const int xdia, const int ydia, float *mstd, float *input)
 {
-    // uint8_t or uint16_t
+    // uint8_t or uint16_t or float
     const PixelType *srcp = (const PixelType *)srcp8;
 
-    // int32_t or int64_t
+    // int32_t or int64_t or double
     AccumType sum = 0, sumsq = 0;
     for (int y=0; y<ydia; ++y)
     {
@@ -504,13 +523,16 @@ void extract_m8_C(const uint8_t *srcp8, const int stride,
         for (int x=0; x<xdia; ++x, ++input)
         {
             sum += srcpT[x];
-            sumsq += (uint32_t)srcpT[x]*(uint32_t)srcpT[x];
+            if (std::is_same<PixelType, float>::value)
+                sumsq += (double)srcpT[x] * srcpT[x];
+            else
+                sumsq += (uint32_t)srcpT[x]*(uint32_t)srcpT[x];
             input[0] = srcpT[x];
         }
     }
     const float scale = 1.0f/(xdia*ydia);
     mstd[0] = sum*scale;
-    // float or double
+    // float or double or double
     const FloatType tmp = (FloatType)sumsq*scale - (FloatType)mstd[0]*mstd[0];
     mstd[3] = 0.0f;
     if (tmp <= FLT_EPSILON)
@@ -670,7 +692,13 @@ void evalFunc_1(void **instanceData, FrameData *frameData)
         {
             for (int x=32; x<width-32; ++x)
             {
-                if (dstp[x] != ((1 << (sizeof(PixelType) * 8)) - 1))
+                uint32_t pixel = 0;
+                memcpy(&pixel, dstp + x, sizeof(PixelType));
+
+                uint32_t all_ones = 0;
+                memset(&all_ones, 255, sizeof(PixelType));
+
+                if (pixel != all_ones)
                     continue;
 
                 float mstd[4];
@@ -681,7 +709,19 @@ void evalFunc_1(void **instanceData, FrameData *frameData)
                     d->expfunc(temp, nns);
                     d->wae5(temp, nns, mstd);
                 }
-                dstp[x] = VSMIN(VSMAX((int)(mstd[3]*scale+0.5f), 0), d->max_value);
+
+                if (std::is_same<PixelType, float>::value) {
+                    float minimum = 0.0f;
+                    float maximum = 1.0f;
+                    if (b && d->vi.format->colorFamily != cmRGB) {
+                        minimum = -0.5f;
+                        maximum = 0.5f;
+                    }
+
+                    dstp[x] = VSMIN(VSMAX(mstd[3]*scale, minimum), maximum);
+                } else {
+                    dstp[x] = VSMIN(VSMAX((int)(mstd[3]*scale+0.5f), 0), d->max_value);
+                }
             }
             srcpp += src_stride*2;
             dstp += dst_stride*2;
@@ -731,13 +771,13 @@ static void selectFunctions(nnedi3Data *d) {
         d->opt = 0;
 #endif
 
-    if (d->vi.format->bitsPerSample == 8) {
+    if (d->vi.format->sampleType == stInteger && d->vi.format->bitsPerSample == 8) {
         d->copyPad = copyPad<uint8_t>;
         d->evalFunc_0 = evalFunc_0<uint8_t>;
         d->evalFunc_1 = evalFunc_1<uint8_t>;
 
         // evalFunc_0
-        d->processLine0 = processLine0_C<uint8_t>;
+        d->processLine0 = processLine0_C<uint8_t, int>;
 
         if (d->pscrn < 2) { // original prescreener
             if (d->fapprox & 1) { // int16 dot products
@@ -845,13 +885,13 @@ static void selectFunctions(nnedi3Data *d) {
                 d->dotProd = dotProd_neon;
         }
 #endif
-    } else {
+    } else if (d->vi.format->sampleType == stInteger && d->vi.format->bitsPerSample == 16) {
         d->copyPad = copyPad<uint16_t>;
         d->evalFunc_0 = evalFunc_0<uint16_t>;
         d->evalFunc_1 = evalFunc_1<uint16_t>;
 
         // evalFunc_0
-        d->processLine0 = processLine0_C<uint16_t>;
+        d->processLine0 = processLine0_C<uint16_t, int>;
 
         d->readPixels = pixel2float48_C<uint16_t>;
         d->computeNetwork0 = computeNetwork0_C;
@@ -904,6 +944,67 @@ static void selectFunctions(nnedi3Data *d) {
 #elif defined(NNEDI3_ARM)
         if (d->opt && cpu.neon) {
             d->readPixels = word2float48_neon;
+            d->computeNetwork0 = computeNetwork0_neon;
+            d->dotProd = dotProd_neon;
+        }
+#endif
+    } else if (d->vi.format->sampleType == stFloat && d->vi.format->bitsPerSample == 32) {
+        d->copyPad = copyPad<float>;
+        d->evalFunc_0 = evalFunc_0<float>;
+        d->evalFunc_1 = evalFunc_1<float>;
+
+        // evalFunc_0
+        d->processLine0 = processLine0_C<float, float>;
+
+        d->readPixels = pixel2float48_C<float>;
+        d->computeNetwork0 = computeNetwork0_C;
+
+        // evalFunc_1
+        d->wae5 = weightedAvgElliottMul5_m16_C;
+
+        d->extract = extract_m8_C<float, double, double>;
+        d->dotProd = dotProd_C;
+
+        if ((d->fapprox & 12) == 0) { // use slow exp
+            d->expfunc = e2_m16_C;
+        } else if ((d->fapprox & 12) == 4) { // use faster exp
+            d->expfunc = e1_m16_C;
+        } else { // use fastest exp
+            d->expfunc = e0_m16_C;
+        }
+
+#if defined(NNEDI3_X86)
+        if (d->opt) {
+            // evalFunc_0
+            d->computeNetwork0 = nnedi3_computeNetwork0_SSE2;
+            if (cpu.fma3)
+                d->computeNetwork0 = nnedi3_computeNetwork0_FMA3;
+            if (cpu.fma4)
+                d->computeNetwork0 = nnedi3_computeNetwork0_FMA4;
+
+            // evalFunc_1
+            d->wae5 = nnedi3_weightedAvgElliottMul5_m16_SSE2;
+
+            d->dotProd = nnedi3_dotProd_SSE2;
+            if (cpu.fma3)
+                d->dotProd = nnedi3_dotProd_FMA3;
+            if (cpu.fma4)
+                d->dotProd = nnedi3_dotProd_FMA4;
+
+            if ((d->fapprox & 12) == 0) { // use slow exp
+                d->expfunc = nnedi3_e2_m16_SSE2;
+            } else if ((d->fapprox & 12) == 4) { // use faster exp
+                d->expfunc = nnedi3_e1_m16_SSE2;
+            } else { // use fastest exp
+                d->expfunc = nnedi3_e0_m16_SSE2;
+                if (cpu.fma3)
+                    d->expfunc = nnedi3_e0_m16_FMA3;
+                if (cpu.fma4)
+                    d->expfunc = nnedi3_e0_m16_FMA4;
+            }
+        }
+#elif defined(NNEDI3_ARM)
+        if (d->opt && cpu.neon) {
             d->computeNetwork0 = computeNetwork0_neon;
             d->dotProd = dotProd_neon;
         }
@@ -1082,11 +1183,16 @@ static void VS_CC nnedi3Init(VSMap *in, VSMap *out, void **instanceData, VSNode 
         }
         else // use float dot products in first layer
         {
-            // Factor mean removal and 1.0/127.5 scaling 
+            double half = (1 << d->vi.format->bitsPerSample) - 1;
+            if (d->vi.format->sampleType == stFloat)
+                half = 1.0;
+            half /= 2;
+
+            // Factor mean removal and 1.0/half scaling
             // into first layer weights.
             for (int j=0; j<4; ++j)
                 for (int k=0; k<48; ++k)
-                    d->weights0[j*48+k] = (float)((bdata[j*48+k]-mean[j])/ (127.5 * (1 << (d->vi.format->bitsPerSample - 8))));
+                    d->weights0[j*48+k] = (float)((bdata[j*48+k]-mean[j]) / half);
             memcpy(d->weights0+4*48,bdata+4*48,(dims0-4*48)*sizeof(float));
             if (d->opt) // shuffle weight order for asm
             {
@@ -1331,9 +1437,10 @@ static void VS_CC nnedi3Create(const VSMap *in, VSMap *out, void *userData, VSCo
     d.node = vsapi->propGetNode(in, "clip", 0, 0);
     d.vi = *vsapi->getVideoInfo(d.node);
 
-    if (!d.vi.format || d.vi.format->sampleType != stInteger
-            || d.vi.format->bitsPerSample > 16) {
-        vsapi->setError(out, "nnedi3: only constant format 8..16 bit integer input supported");
+    if (!d.vi.format ||
+        (d.vi.format->sampleType == stInteger && d.vi.format->bitsPerSample > 16) ||
+        (d.vi.format->sampleType == stFloat && d.vi.format->bitsPerSample != 32)) {
+        vsapi->setError(out, "nnedi3: only constant format 8..16 bit integer or 32 bit float input supported");
         vsapi->freeNode(d.node);
         return;
     }
