@@ -161,6 +161,9 @@ static void copyPad(const VSFrameRef *src, FrameData *frameData, void **instance
     nnedi3Data *d = (nnedi3Data *) * instanceData;
 
     for (int plane = 0; plane < d->vi.format->numPlanes; ++plane) {
+        if (!d->process[plane])
+            continue;
+
         const PixelType *srcp = (const PixelType *)vsapi->getReadPtr(src, plane);
         PixelType *dstp = (PixelType *)frameData->paddedp[plane];
 
@@ -1330,8 +1333,12 @@ static const VSFrameRef *VS_CC nnedi3GetFrame(int n, int activationReason, void 
 
 
         FrameData *frameData = (FrameData *)malloc(sizeof(FrameData));
+        memset(frameData, 0, sizeof(FrameData));
 
         for (int plane = 0; plane < d->vi.format->numPlanes; plane++) {
+            if (!d->process[plane])
+                continue;
+
             const int min_pad = 10;
             const int min_alignment = 16;
 
@@ -1371,6 +1378,9 @@ static const VSFrameRef *VS_CC nnedi3GetFrame(int n, int activationReason, void 
 
         // Clean up.
         for (int plane = 0; plane < d->vi.format->numPlanes; plane++) {
+            if (!d->process[plane])
+                continue;
+
             vs_aligned_free(frameData->paddedp[plane]);
             vs_aligned_free(frameData->lcount[plane]);
         }
