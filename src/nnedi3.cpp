@@ -37,17 +37,8 @@
 #include "cpufeatures.h"
 
 #ifdef _WIN32
-#include <vector>
-
-#include <windows.h>
-
-static std::wstring utf16_from_bytes(const std::string &str) {
-    int required_size = MultiByteToWideChar(CP_UTF8, 0, str.c_str(), -1, NULL, 0);
-    std::vector<wchar_t> wbuffer;
-    wbuffer.resize(required_size);
-    MultiByteToWideChar(CP_UTF8, 0, str.c_str(), -1, wbuffer.data(), required_size);
-    return std::wstring(wbuffer.data());
-}
+#include <codecvt>
+#include <locale>
 #endif
 
 
@@ -1023,7 +1014,9 @@ static void VS_CC nnedi3Init(VSMap *in, VSMap *out, void **instanceData, VSNode 
     FILE *weights_file = NULL;
 
 #ifdef _WIN32
-    weights_file = _wfopen(utf16_from_bytes(weights_path).c_str(), L"rb");
+    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>, wchar_t> utf16;
+
+    weights_file = _wfopen(utf16.from_bytes(weights_path).c_str(), L"rb");
 #else
     weights_file = fopen(weights_path.c_str(), "rb");
 #endif
