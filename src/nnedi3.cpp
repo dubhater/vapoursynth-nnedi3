@@ -27,6 +27,7 @@
 #include <cstdlib>
 #include <cstring>
 
+#include <algorithm>
 #include <string>
 #include <type_traits>
 
@@ -48,10 +49,6 @@ static std::wstring utf16_from_bytes(const std::string &str) {
     return std::wstring(wbuffer.data());
 }
 #endif
-
-
-#define min(a, b)  (((a) < (b)) ? (a) : (b))
-#define max(a, b)  (((a) > (b)) ? (a) : (b))
 
 
 #if defined(NNEDI3_X86)
@@ -275,7 +272,7 @@ void computeNetwork0_C(const float *input, const float *weights, uint8_t *d)
     dotProd_C(temp,weights+4*49,temp+4,4,4,&scale);
     elliott_C(temp+4,4);
     dotProd_C(temp,weights+4*49+4*5,temp+8,4,8,&scale);
-    if (max(temp[10],temp[11]) <= max(temp[8],temp[9]))
+    if (std::max(temp[10],temp[11]) <= std::max(temp[8],temp[9]))
         d[0] = 1;
     else
         d[0] = 0;
@@ -293,7 +290,7 @@ void computeNetwork0_i16_C(const float *inputf, const float *weightsf, uint8_t *
     dotProd_C(temp,wf+8,temp+4,4,4,&scale);
     elliott_C(temp+4,4);
     dotProd_C(temp,wf+8+4*5,temp+8,4,8,&scale);
-    if (max(temp[10],temp[11]) <= max(temp[8],temp[9]))
+    if (std::max(temp[10],temp[11]) <= std::max(temp[8],temp[9]))
         d[0] = 1;
     else
         d[0] = 0;
@@ -321,7 +318,7 @@ void byte2word48_C(const uint8_t *t, const int pitch, float *pf)
 
 
 #ifdef NNEDI3_X86
-#define CB2(n) max(min((n),254),0)
+#define CB2(n) std::max(std::min((n),254),0)
 int32_t processLine0_maybeSSE2(const uint8_t *tempu, int width, uint8_t *dstp,
         const uint8_t *src3p, const int src_pitch, const int max_value, const int) {
     int32_t count = 0;
@@ -376,7 +373,7 @@ int32_t processLine0_C(const uint8_t *tempu, int width, uint8_t *dstp8,
             if (!std::is_same<TempType, float>::value)
                 tmp += 16;
             tmp /= 32;
-            dstp[x] = VSMAX(VSMIN(tmp, maximum), minimum);
+            dstp[x] = std::max(std::min(tmp, maximum), minimum);
         }
         else
         {
@@ -590,7 +587,7 @@ void e0_m16_C(float *s, const int n)
 {
     for (int i=0; i<n; ++i)
     {
-        const int t = (int)(max(min(s[i],exp_hi),exp_lo)*e0_mult+e0_bias);
+        const int t = (int)(std::max(std::min(s[i],exp_hi),exp_lo)*e0_mult+e0_bias);
         memcpy(&s[i], &t, sizeof(float));
     }
 }
@@ -610,7 +607,7 @@ void e1_m16_C(float *s, const int n)
 {
     for (int q=0; q<n; ++q)
     {
-        float x = max(min(s[q],exp_hi),exp_lo)*e1_scale;
+        float x = std::max(std::min(s[q],exp_hi),exp_lo)*e1_scale;
         int i = (int)(x + 128.5f) - 128;
         x -= i;
         x = e1_c0 + e1_c1*x + e1_c2*x*x;
@@ -625,7 +622,7 @@ void e1_m16_C(float *s, const int n)
 void e2_m16_C(float *s, const int n)
 {
     for (int i=0; i<n; ++i)
-        s[i] = expf(max(min(s[i],exp_hi),exp_lo));
+        s[i] = expf(std::max(std::min(s[i],exp_hi),exp_lo));
 }
 
 // exp from Intel Approximate Math (AM) Library
@@ -718,9 +715,9 @@ void evalFunc_1(void **instanceData, FrameData *frameData)
                         maximum = 0.5f;
                     }
 
-                    dstp[x] = VSMIN(VSMAX(mstd[3]*scale, minimum), maximum);
+                    dstp[x] = std::min(std::max(mstd[3]*scale, minimum), maximum);
                 } else {
-                    dstp[x] = VSMIN(VSMAX((int)(mstd[3]*scale+0.5f), 0), d->max_value);
+                    dstp[x] = std::min(std::max((int)(mstd[3]*scale+0.5f), 0), d->max_value);
                 }
             }
             srcpp += src_stride*2;
@@ -737,8 +734,8 @@ void evalFunc_1(void **instanceData, FrameData *frameData)
 int roundds(const double f)
 {
     if (f-floor(f) >= 0.5)
-        return min((int)ceil(f),32767);
-    return max((int)floor(f),-32768);
+        return std::min((int)ceil(f),32767);
+    return std::max((int)floor(f),-32768);
 }
 
 
@@ -1100,7 +1097,7 @@ static void VS_CC nnedi3Init(VSMap *in, VSMap *out, void **instanceData, VSNode 
         }
     }
 
-    d->weights0 = vs_aligned_malloc<float>(max(dims0, dims0new) * sizeof(float), 16);
+    d->weights0 = vs_aligned_malloc<float>(std::max(dims0, dims0new) * sizeof(float), 16);
 
     for (int i = 0; i < 2; ++i)
     {
@@ -1133,7 +1130,7 @@ static void VS_CC nnedi3Init(VSMap *in, VSMap *out, void **instanceData, VSNode 
         {
             double mval = 0.0;
             for (int k=0; k<64; ++k)
-                mval = max(mval,fabs((bdw[offt[j*64+k]]-mean[j])/127.5));
+                mval = std::max(mval,fabs((bdw[offt[j*64+k]]-mean[j])/127.5));
             const double scale = 32767.0/mval;
             for (int k=0; k<64; ++k)
                 ws[offt[j*64+k]] = roundds(((bdw[offt[j*64+k]]-mean[j])/127.5)*scale);
@@ -1163,7 +1160,7 @@ static void VS_CC nnedi3Init(VSMap *in, VSMap *out, void **instanceData, VSNode 
             {
                 double mval = 0.0;
                 for (int k=0; k<48; ++k)
-                    mval = max(mval,fabs((bdata[j*48+k]-mean[j])/127.5));
+                    mval = std::max(mval,fabs((bdata[j*48+k]-mean[j])/127.5));
                 const double scale = 32767.0/mval;
                 for (int k=0; k<48; ++k)
                     ws[j*48+k] = roundds(((bdata[j*48+k]-mean[j])/127.5)*scale);
@@ -1243,7 +1240,7 @@ static void VS_CC nnedi3Init(VSMap *in, VSMap *out, void **instanceData, VSNode 
             {
                 double mval = 0.0;
                 for (int k=0; k<asize; ++k)
-                    mval = max(mval,fabs(bdataT[j*asize+k]-mean[asize+1+j]-mean[k]));
+                    mval = std::max(mval,fabs(bdataT[j*asize+k]-mean[asize+1+j]-mean[k]));
                 const double scale = 32767.0/mval;
                 for (int k=0; k<asize; ++k)
                     ws[j*asize+k] = roundds((bdataT[j*asize+k]-mean[asize+1+j]-mean[k])*scale);
@@ -1254,7 +1251,7 @@ static void VS_CC nnedi3Init(VSMap *in, VSMap *out, void **instanceData, VSNode 
             {
                 double mval = 0.0;
                 for (int k=0; k<asize; ++k)
-                    mval = max(mval,fabs(bdataT[j*asize+k]-mean[asize+1+j]));
+                    mval = std::max(mval,fabs(bdataT[j*asize+k]-mean[asize+1+j]));
                 const double scale = 32767.0/mval;
                 for (int k=0; k<asize; ++k)
                     ws[j*asize+k] = roundds((bdataT[j*asize+k]-mean[asize+1+j])*scale);
@@ -1369,7 +1366,7 @@ static const VSFrameRef *VS_CC nnedi3GetFrame(int n, int activationReason, void 
         frameData->input = vs_aligned_malloc<float>(512 * sizeof(float), 16);
         // evalFunc_0 requires at least padded_width[0] bytes.
         // evalFunc_1 requires at least 512 floats.
-        size_t temp_size = max((size_t)frameData->padded_width[0], 512 * sizeof(float));
+        size_t temp_size = std::max((size_t)frameData->padded_width[0], 512 * sizeof(float));
         frameData->temp = vs_aligned_malloc<float>(temp_size, 16);
 
         // Copy src to a padded "frame" in frameData and mirror the edges.
