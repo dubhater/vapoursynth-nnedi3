@@ -430,32 +430,32 @@ void evalFunc_0(void **instanceData, FrameData *frameData)
     uint8_t *tempu = (uint8_t*)temp;
 
     // And now the actual work.
-    for (int b = 0; b < d->vi.format->numPlanes; ++b)
+    for (int plane = 0; plane < d->vi.format->numPlanes; ++plane)
     {
-        if (!d->process[b])
+        if (!d->process[plane])
             continue;
 
-        const PixelType *srcp = (const PixelType *)frameData->paddedp[b];
-        const int src_stride = frameData->padded_stride[b] / sizeof(PixelType);
+        const PixelType *srcp = (const PixelType *)frameData->paddedp[plane];
+        const int src_stride = frameData->padded_stride[plane] / sizeof(PixelType);
 
-        const int width = frameData->padded_width[b];
-        const int height = frameData->padded_height[b];
+        const int width = frameData->padded_width[plane];
+        const int height = frameData->padded_height[plane];
 
-        PixelType *dstp = (PixelType *)frameData->dstp[b];
-        const int dst_stride = frameData->dst_stride[b] / sizeof(PixelType);
+        PixelType *dstp = (PixelType *)frameData->dstp[plane];
+        const int dst_stride = frameData->dst_stride[plane] / sizeof(PixelType);
 
-        for (int y = 1 - frameData->field[b]; y < height - 12; y += 2) {
+        for (int y = 1 - frameData->field[plane]; y < height - 12; y += 2) {
             memcpy(dstp + y*dst_stride,
                     srcp + 32 + (6+y)*src_stride,
                     (width - 64) * sizeof(PixelType));
         }
 
-        const int ystart = 6 + frameData->field[b];
+        const int ystart = 6 + frameData->field[plane];
         const int ystop = height - 6;
         srcp += ystart*src_stride;
         dstp += (ystart-6)*dst_stride-32;
         const PixelType *src3p = srcp - src_stride*3;
-        int32_t *lcount = frameData->lcount[b]-6;
+        int32_t *lcount = frameData->lcount[plane]-6;
         if (d->pscrn == 1) // original
         {
             for (int y=ystart; y<ystop; y+=2)
@@ -465,7 +465,7 @@ void evalFunc_0(void **instanceData, FrameData *frameData)
                     d->readPixels((const uint8_t *)(src3p + x - 5), src_stride, input);
                     d->computeNetwork0(input, weights0, tempu+x);
                 }
-                lcount[y] += d->processLine0(tempu+32, width-64, (uint8_t *)(dstp + 32), (const uint8_t *)(src3p + 32), src_stride, d->max_value, b && d->vi.format->colorFamily != cmRGB);
+                lcount[y] += d->processLine0(tempu+32, width-64, (uint8_t *)(dstp + 32), (const uint8_t *)(src3p + 32), src_stride, d->max_value, plane && d->vi.format->colorFamily != cmRGB);
                 src3p += src_stride*2;
                 dstp += dst_stride*2;
             }
@@ -479,7 +479,7 @@ void evalFunc_0(void **instanceData, FrameData *frameData)
                     d->readPixels((const uint8_t *)(src3p+x-6),src_stride,input);
                     d->computeNetwork0(input,weights0,tempu+x);
                 }
-                lcount[y] += d->processLine0(tempu+32,width-64,(uint8_t *)(dstp+32),(const uint8_t *)(src3p+32),src_stride, d->max_value, b && d->vi.format->colorFamily != cmRGB);
+                lcount[y] += d->processLine0(tempu+32,width-64,(uint8_t *)(dstp+32),(const uint8_t *)(src3p+32),src_stride, d->max_value, plane && d->vi.format->colorFamily != cmRGB);
                 src3p += src_stride*2;
                 dstp += dst_stride*2;
             }
@@ -654,21 +654,21 @@ void evalFunc_1(void **instanceData, FrameData *frameData)
     const int ydia = d->ydia;
     const float scale = 1.0f/(float)qual;
 
-    for (int b = 0; b < d->vi.format->numPlanes; ++b)
+    for (int plane = 0; plane < d->vi.format->numPlanes; ++plane)
     {
-        if (!d->process[b])
+        if (!d->process[plane])
             continue;
 
-        const PixelType *srcp = (const PixelType *)frameData->paddedp[b];
-        const int src_stride = frameData->padded_stride[b] / sizeof(PixelType);
+        const PixelType *srcp = (const PixelType *)frameData->paddedp[plane];
+        const int src_stride = frameData->padded_stride[plane] / sizeof(PixelType);
 
-        const int width = frameData->padded_width[b];
-        const int height = frameData->padded_height[b];
+        const int width = frameData->padded_width[plane];
+        const int height = frameData->padded_height[plane];
 
-        PixelType *dstp = (PixelType *)frameData->dstp[b];
-        const int dst_stride = frameData->dst_stride[b] / sizeof(PixelType);
+        PixelType *dstp = (PixelType *)frameData->dstp[plane];
+        const int dst_stride = frameData->dst_stride[plane] / sizeof(PixelType);
 
-        const int ystart = frameData->field[b];
+        const int ystart = frameData->field[plane];
         const int ystop = height - 12;
 
         srcp += (ystart+6)*src_stride;
@@ -700,7 +700,7 @@ void evalFunc_1(void **instanceData, FrameData *frameData)
                 if (std::is_same<PixelType, float>::value) {
                     float minimum = 0.0f;
                     float maximum = 1.0f;
-                    if (b && d->vi.format->colorFamily != cmRGB) {
+                    if (plane && d->vi.format->colorFamily != cmRGB) {
                         minimum = -0.5f;
                         maximum = 0.5f;
                     }
