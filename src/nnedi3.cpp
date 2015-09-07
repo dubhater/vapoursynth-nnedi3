@@ -126,7 +126,7 @@ typedef struct {
     // Parameters.
     int field;
     int dh; // double height
-    int Y, U, V; // used as bool
+    int process[3];
     int nsize;
     int nnsparam;
     int qual;
@@ -429,9 +429,7 @@ void evalFunc_0(void **instanceData, FrameData *frameData)
     // And now the actual work.
     for (int b = 0; b < d->vi.format->numPlanes; ++b)
     {
-        if ((b == 0 && !d->Y) || 
-            (b == 1 && !d->U) ||
-            (b == 2 && !d->V))
+        if (!d->process[b])
             continue;
 
         const PixelType *srcp = (const PixelType *)frameData->paddedp[b];
@@ -655,9 +653,7 @@ void evalFunc_1(void **instanceData, FrameData *frameData)
 
     for (int b = 0; b < d->vi.format->numPlanes; ++b)
     {
-        if ((b == 0 && !d->Y) || 
-            (b == 1 && !d->U) ||
-            (b == 2 && !d->V))
+        if (!d->process[b])
             continue;
 
         const PixelType *srcp = (const PixelType *)frameData->paddedp[b];
@@ -1441,17 +1437,56 @@ static void VS_CC nnedi3Create(const VSMap *in, VSMap *out, void *userData, VSCo
     // Defaults to 0.
     d.dh = int64ToIntS(vsapi->propGetInt(in, "dh", 0, &err));
 
-    d.Y = int64ToIntS(vsapi->propGetInt(in, "Y", 0, &err));
-    if (err) {
-        d.Y = 1;
+    int n = d.vi.format->numPlanes;
+    int m = vsapi->propNumElements(in, "planes");
+
+    for (int i = 0; i < 3; i++)
+        d.process[i] = (m <= 0);
+
+    for (int i = 0; i < m; i++) {
+        int o = int64ToIntS(vsapi->propGetInt(in, "planes", i, 0));
+
+        if (o < 0 || o >= n) {
+            vsapi->setError(out, "nnedi3: plane index out of range");
+            vsapi->freeNode(d.node);
+            return;
+        }
+
+        if (d.process[o]) {
+            vsapi->setError(out, "nnedi3: plane specified twice");
+            vsapi->freeNode(d.node);
+            return;
+        }
+
+        d.process[o] = 1;
     }
-    d.U = int64ToIntS(vsapi->propGetInt(in, "U", 0, &err));
-    if (err) {
-        d.U = 1;
+
+    int Y = int64ToIntS(vsapi->propGetInt(in, "Y", 0, &err));
+    if (!err) {
+        if (m > -1) {
+            vsapi->setError(out, "nnedi3: can't use 'Y' and 'planes' at the same time");
+            vsapi->freeNode(d.node);
+            return;
+        }
+        d.process[0] = Y;
     }
-    d.V = int64ToIntS(vsapi->propGetInt(in, "V", 0, &err));
-    if (err) {
-        d.V = 1;
+    int U = int64ToIntS(vsapi->propGetInt(in, "U", 0, &err));
+    if (!err) {
+        if (m > -1) {
+            vsapi->setError(out, "nnedi3: can't use 'U' and 'planes' at the same time");
+            vsapi->freeNode(d.node);
+            return;
+        }
+        d.process[1] = U;
+    }
+    int V = int64ToIntS(vsapi->propGetInt(in, "V", 0, &err));
+    if (!err) {
+        if (m > -1) {
+            vsapi->setError(out, "nnedi3: can't use 'V' and 'planes' at the same time");
+            vsapi->freeNode(d.node);
+            return;
+        }
+        d.process[2] = V;
     }
 
     d.nsize = int64ToIntS(vsapi->propGetInt(in, "nsize", 0, &err));
@@ -1510,10 +1545,6 @@ static void VS_CC nnedi3Create(const VSMap *in, VSMap *out, void *userData, VSCo
         vsapi->freeNode(d.node);
         return;
     }
-
-    d.Y = !!d.Y;
-    d.U = !!d.U;
-    d.V = !!d.V;
 
     if (d.nsize < 0 || d.nsize >= NUM_NSIZE) {
         vsapi->setError(out, "nnedi3: nsize must be between 0 and 6 (inclusive)");
@@ -1835,6 +1866,7 @@ VS_EXTERNAL_API(void) VapourSynthPluginInit(VSConfigPlugin configFunc, VSRegiste
             "clip:clip;"
             "field:int;"
             "dh:int:opt;"
+            "planes:int[]:opt;"
             "Y:int:opt;"
             "U:int:opt;"
             "V:int:opt;"
