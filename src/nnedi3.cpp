@@ -220,7 +220,7 @@ static void copyPad(const VSFrameRef *src, FrameData *frameData, const nnedi3Dat
 
 void elliott_C(float *data, const int n) {
     for (int i = 0; i < n; ++i)
-        data[i] = data[i] / (1.0f + fabsf(data[i]));
+        data[i] = data[i] / (1.0f + std::fabs(data[i]));
 }
 
 
@@ -380,7 +380,7 @@ void computeNetwork0new_C(const float *datai, const float *weights, uint8_t *d) 
         for (int j = 0; j < 64; ++j)
             sum += data[j] * ws[(i << 3) + ((j >> 3) << 5) + (j & 7)];
         const float t = sum * wf[i] + wf[4 + i];
-        vals[i] = t / (1.0f + fabsf(t));
+        vals[i] = t / (1.0f + std::fabs(t));
     }
     for (int i = 0; i < 4; ++i) {
         float sum = 0.0f;
@@ -510,7 +510,7 @@ void extract_m8_i16_C(const uint8_t *srcp, const int stride, const int xdia, con
     if (mstd[1] <= FLT_EPSILON)
         mstd[1] = mstd[2] = 0.0f;
     else {
-        mstd[1] = sqrtf(mstd[1]);
+        mstd[1] = std::sqrt(mstd[1]);
         mstd[2] = 1.0f / mstd[1];
     }
 }
@@ -562,7 +562,7 @@ void e1_m16_C(float *s, const int n) {
 
 void e2_m16_C(float *s, const int n) {
     for (int i = 0; i < n; ++i)
-        s[i] = expf(std::max(std::min(s[i], exp_hi), exp_lo));
+        s[i] = std::exp(std::max(std::min(s[i], exp_hi), exp_lo));
 }
 
 // exp from Intel Approximate Math (AM) Library
@@ -574,7 +574,7 @@ const float min_weight_sum = 1e-10f;
 void weightedAvgElliottMul5_m16_C(const float *w, const int n, float *mstd) {
     float vsum = 0.0f, wsum = 0.0f;
     for (int i = 0; i < n; ++i) {
-        vsum += w[i] * (w[n + i] / (1.0f + fabsf(w[n + i])));
+        vsum += w[i] * (w[n + i] / (1.0f + std::fabs(w[n + i])));
         wsum += w[i];
     }
     if (wsum > min_weight_sum)
@@ -661,9 +661,9 @@ void evalFunc_1(const nnedi3Data *d, FrameData *frameData) {
 
 
 int roundds(const double f) {
-    if (f - floor(f) >= 0.5)
-        return std::min((int)ceil(f), 32767);
-    return std::max((int)floor(f), -32768);
+    if (f - std::floor(f) >= 0.5)
+        return std::min((int)std::ceil(f), 32767);
+    return std::max((int)std::floor(f), -32768);
 }
 
 
@@ -1047,7 +1047,7 @@ static void VS_CC nnedi3Init(VSMap *in, VSMap *out, void **instanceData, VSNode 
         for (int j = 0; j < 4; ++j) {
             double mval = 0.0;
             for (int k = 0; k < 64; ++k)
-                mval = std::max(mval, fabs((bdw[offt[j * 64 + k]] - mean[j]) / 127.5));
+                mval = std::max(mval, std::fabs((bdw[offt[j * 64 + k]] - mean[j]) / 127.5));
             const double scale = 32767.0 / mval;
             for (int k = 0; k < 64; ++k)
                 ws[offt[j * 64 + k]] = roundds(((bdw[offt[j * 64 + k]] - mean[j]) / 127.5) * scale);
@@ -1072,7 +1072,7 @@ static void VS_CC nnedi3Init(VSMap *in, VSMap *out, void **instanceData, VSNode 
             for (int j = 0; j < 4; ++j) {
                 double mval = 0.0;
                 for (int k = 0; k < 48; ++k)
-                    mval = std::max(mval, fabs((bdata[j * 48 + k] - mean[j]) / 127.5));
+                    mval = std::max(mval, std::fabs((bdata[j * 48 + k] - mean[j]) / 127.5));
                 const double scale = 32767.0 / mval;
                 for (int k = 0; k < 48; ++k)
                     ws[j * 48 + k] = roundds(((bdata[j * 48 + k] - mean[j]) / 127.5) * scale);
@@ -1144,7 +1144,7 @@ static void VS_CC nnedi3Init(VSMap *in, VSMap *out, void **instanceData, VSNode 
             for (int j = 0; j < nnst; ++j) {// softmax neurons
                 double mval = 0.0;
                 for (int k = 0; k < asize; ++k)
-                    mval = std::max(mval, fabs(bdataT[j * asize + k] - mean[asize + 1 + j] - mean[k]));
+                    mval = std::max(mval, std::fabs(bdataT[j * asize + k] - mean[asize + 1 + j] - mean[k]));
                 const double scale = 32767.0 / mval;
                 for (int k = 0; k < asize; ++k)
                     ws[j * asize + k] = roundds((bdataT[j * asize + k] - mean[asize + 1 + j] - mean[k]) * scale);
@@ -1154,7 +1154,7 @@ static void VS_CC nnedi3Init(VSMap *in, VSMap *out, void **instanceData, VSNode 
             for (int j = nnst; j < nnst * 2; ++j) {// elliott neurons
                 double mval = 0.0;
                 for (int k = 0; k < asize; ++k)
-                    mval = std::max(mval, fabs(bdataT[j * asize + k] - mean[asize + 1 + j]));
+                    mval = std::max(mval, std::fabs(bdataT[j * asize + k] - mean[asize + 1 + j]));
                 const double scale = 32767.0 / mval;
                 for (int k = 0; k < asize; ++k)
                     ws[j * asize + k] = roundds((bdataT[j * asize + k] - mean[asize + 1 + j]) * scale);
