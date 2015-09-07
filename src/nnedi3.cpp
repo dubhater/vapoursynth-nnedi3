@@ -112,7 +112,10 @@ typedef struct {
 } FrameData;
 
 
-typedef struct {
+typedef struct nnedi3Data nnedi3Data;
+
+
+struct nnedi3Data {
     VSNodeRef *node;
     VSVideoInfo vi;
 
@@ -137,28 +140,26 @@ typedef struct {
 
     int max_value;
 
-    void (*copyPad)(const VSFrameRef *, FrameData *, void **, int, const VSAPI *);
-    void (*evalFunc_0)(void **, FrameData *);
-    void (*evalFunc_1)(void **, FrameData *);
+    void (*copyPad)(const VSFrameRef *, FrameData *, const nnedi3Data *, int, const VSAPI *);
+    void (*evalFunc_0)(const nnedi3Data *, FrameData *);
+    void (*evalFunc_1)(const nnedi3Data *, FrameData *);
 
     // Functions used in evalFunc_0
-    void (*readPixels)(const uint8_t*, const int, float*);
-    void (*computeNetwork0)(const float*, const float*, uint8_t *);
-    int32_t (*processLine0)(const uint8_t*, int, uint8_t*, const uint8_t*, const int, const int, const int);
+    void (*readPixels)(const uint8_t *, const int, float *);
+    void (*computeNetwork0)(const float *, const float *, uint8_t *);
+    int32_t (*processLine0)(const uint8_t *, int, uint8_t *, const uint8_t *, const int, const int, const int);
 
     // Functions used in evalFunc_1
-    void (*extract)(const uint8_t*, const int, const int, const int, float*, float*);
-    void (*dotProd)(const float*, const float*, float*, const int, const int, const float*);
+    void (*extract)(const uint8_t *, const int, const int, const int, float *, float *);
+    void (*dotProd)(const float *, const float *, float *, const int, const int, const float *);
     void (*expfunc)(float *, const int);
-    void (*wae5)(const float*, const int, float*);
-} nnedi3Data;
+    void (*wae5)(const float *, const int, float *);
+};
 
 
 template <typename PixelType>
-static void copyPad(const VSFrameRef *src, FrameData *frameData, void **instanceData, int fn, const VSAPI *vsapi) {
+static void copyPad(const VSFrameRef *src, FrameData *frameData, const nnedi3Data *d, int fn, const VSAPI *vsapi) {
     const int off = 1 - fn;
-
-    nnedi3Data *d = (nnedi3Data *) * instanceData;
 
     for (int plane = 0; plane < d->vi.format->numPlanes; ++plane) {
         if (!d->process[plane])
@@ -178,113 +179,104 @@ static void copyPad(const VSFrameRef *src, FrameData *frameData, void **instance
 
         // Copy.
         if (!d->dh) {
-            for (int y = off; y < src_height; y += 2) {
-                memcpy(dstp + 32 + (6+y)*dst_stride,
-                        srcp + y*src_stride,
-                        src_width * sizeof(PixelType));
-            }
+            for (int y = off; y < src_height; y += 2)
+                memcpy(dstp + 32 + (6 + y) * dst_stride,
+                       srcp + y * src_stride,
+                       src_width * sizeof(PixelType));
         } else {
-            for (int y = 0; y < src_height; y++) {
-                memcpy(dstp + 32 + (6+y*2+off)*dst_stride,
-                        srcp + y*src_stride,
-                        src_width * sizeof(PixelType));
-            }
+            for (int y = 0; y < src_height; y++)
+                memcpy(dstp + 32 + (6 + y * 2 + off) * dst_stride,
+                       srcp + y * src_stride,
+                       src_width * sizeof(PixelType));
         }
 
         // And pad.
-        dstp += (6+off)*dst_stride;
+        dstp += (6 + off) * dst_stride;
         for (int y = 6 + off; y < dst_height - 6; y += 2) {
-            for (int x = 0; x < 32; ++x) {
-                dstp[x] = dstp[64-x];
-            }
+            for (int x = 0; x < 32; ++x)
+                dstp[x] = dstp[64 - x];
+
             int c = 2;
-            for (int x = dst_width - 32; x < dst_width; ++x, c += 2) {
-                dstp[x] = dstp[x-c];
-            }
-            dstp += dst_stride*2;
+            for (int x = dst_width - 32; x < dst_width; ++x, c += 2)
+                dstp[x] = dstp[x - c];
+
+            dstp += dst_stride * 2;
         }
 
         dstp = (PixelType *)frameData->paddedp[plane];
-        for (int y = off; y < 6; y += 2) {
-            memcpy(dstp + y*dst_stride,
-                    dstp + (12+2*off-y)*dst_stride,
-                    dst_width * sizeof(PixelType));
-        }
+        for (int y = off; y < 6; y += 2)
+            memcpy(dstp + y * dst_stride,
+                   dstp + (12 + 2 * off - y) * dst_stride,
+                   dst_width * sizeof(PixelType));
+
         int c = 4;
-        for (int y = dst_height - 6 + off; y < dst_height; y += 2, c += 4) {
-            memcpy(dstp + y*dst_stride,
-                    dstp + (y-c)*dst_stride,
-                    dst_width * sizeof(PixelType));
-        }
+        for (int y = dst_height - 6 + off; y < dst_height; y += 2, c += 4)
+            memcpy(dstp + y * dst_stride,
+                   dstp + (y - c) * dst_stride,
+                   dst_width * sizeof(PixelType));
     }
 }
 
 
-void elliott_C(float *data, const int n)
-{
-    for (int i=0; i<n; ++i)
-        data[i] = data[i]/(1.0f+fabsf(data[i]));
+void elliott_C(float *data, const int n) {
+    for (int i = 0; i < n; ++i)
+        data[i] = data[i] / (1.0f + fabsf(data[i]));
 }
 
 
-void dotProd_C(const float *data, const float *weights, 
-        float *vals, const int n, const int len, const float *scale)
-{
-    for (int i=0; i<n; ++i)
-    {
+void dotProd_C(const float *data, const float *weights, float *vals, const int n, const int len, const float *scale) {
+    for (int i = 0; i < n; ++i) {
         float sum = 0.0f;
-        for (int j=0; j<len; ++j)
-            sum += data[j]*weights[i*len+j];
-        vals[i] = sum*scale[0]+weights[n*len+i];
+        for (int j = 0; j < len; ++j)
+            sum += data[j] * weights[i * len + j];
+
+        vals[i] = sum * scale[0] + weights[n * len + i];
     }
 }
 
 
-void dotProdS_C(const float *dataf, const float *weightsf, 
-        float *vals, const int n, const int len, const float *scale)
-{
-    const int16_t *data = (int16_t*)dataf;
-    const int16_t *weights = (int16_t*)weightsf;
-    const float *wf = (float*)&weights[n*len];
-    for (int i=0; i<n; ++i)
-    {
-        int sum = 0, off = ((i>>2)<<3)+(i&3);
-        for (int j=0; j<len; ++j)
-            sum += data[j]*weights[i*len+j];
-        vals[i] = sum*wf[off]*scale[0]+wf[off+4];
+void dotProdS_C(const float *dataf, const float *weightsf, float *vals, const int n, const int len, const float *scale) {
+    const int16_t *data = (int16_t *)dataf;
+    const int16_t *weights = (int16_t *)weightsf;
+    const float *wf = (float *)&weights[n * len];
+
+    for (int i = 0; i < n; ++i) {
+        int sum = 0, off = ((i >> 2) << 3) + (i & 3);
+        for (int j = 0; j < len; ++j)
+            sum += data[j] * weights[i * len + j];
+
+        vals[i] = sum * wf[off] * scale[0] + wf[off + 4];
     }
 }
 
 
-void computeNetwork0_C(const float *input, const float *weights, uint8_t *d)
-{
+void computeNetwork0_C(const float *input, const float *weights, uint8_t *d) {
     float temp[12], scale = 1.0f;
-    dotProd_C(input,weights,temp,4,48,&scale);
+    dotProd_C(input, weights, temp, 4, 48, &scale);
     const float t = temp[0];
-    elliott_C(temp,4);
+    elliott_C(temp, 4);
     temp[0] = t;
-    dotProd_C(temp,weights+4*49,temp+4,4,4,&scale);
-    elliott_C(temp+4,4);
-    dotProd_C(temp,weights+4*49+4*5,temp+8,4,8,&scale);
-    if (std::max(temp[10],temp[11]) <= std::max(temp[8],temp[9]))
+    dotProd_C(temp, weights + 4 * 49, temp + 4, 4, 4, &scale);
+    elliott_C(temp + 4, 4);
+    dotProd_C(temp, weights + 4 * 49 + 4 * 5, temp + 8, 4, 8, &scale);
+    if (std::max(temp[10], temp[11]) <= std::max(temp[8], temp[9]))
         d[0] = 1;
     else
         d[0] = 0;
 }
 
 
-void computeNetwork0_i16_C(const float *inputf, const float *weightsf, uint8_t *d)
-{
-    const float *wf = weightsf+2*48;
+void computeNetwork0_i16_C(const float *inputf, const float *weightsf, uint8_t *d) {
+    const float *wf = weightsf + 2 * 48;
     float temp[12], scale = 1.0f;
-    dotProdS_C(inputf,weightsf,temp,4,48,&scale);
+    dotProdS_C(inputf, weightsf, temp, 4, 48, &scale);
     const float t = temp[0];
-    elliott_C(temp,4);
+    elliott_C(temp, 4);
     temp[0] = t;
-    dotProd_C(temp,wf+8,temp+4,4,4,&scale);
-    elliott_C(temp+4,4);
-    dotProd_C(temp,wf+8+4*5,temp+8,4,8,&scale);
-    if (std::max(temp[10],temp[11]) <= std::max(temp[8],temp[9]))
+    dotProd_C(temp, wf + 8, temp + 4, 4, 4, &scale);
+    elliott_C(temp + 4, 4);
+    dotProd_C(temp, wf + 8 + 4 * 5, temp + 8, 4, 8, &scale);
+    if (std::max(temp[10], temp[11]) <= std::max(temp[8], temp[9]))
         d[0] = 1;
     else
         d[0] = 0;
@@ -292,38 +284,35 @@ void computeNetwork0_i16_C(const float *inputf, const float *weightsf, uint8_t *
 
 
 template <typename PixelType>
-void pixel2float48_C(const uint8_t *t8, const int pitch, float *p)
-{
+void pixel2float48_C(const uint8_t *t8, const int pitch, float *p) {
     const PixelType *t = (const PixelType *)t8;
 
-    for (int y=0; y<4; ++y)
-        for (int x=0; x<12; ++x)
-            p[y*12+x] = t[y*pitch*2+x];
+    for (int y = 0; y < 4; ++y)
+        for (int x = 0; x < 12; ++x)
+            p[y * 12 + x] = t[y * pitch * 2 + x];
 }
 
 
-void byte2word48_C(const uint8_t *t, const int pitch, float *pf)
-{
-    int16_t *p = (int16_t*)pf;
-    for (int y=0; y<4; ++y)
-        for (int x=0; x<12; ++x)
-            p[y*12+x] = t[y*pitch*2+x];
+void byte2word48_C(const uint8_t *t, const int pitch, float *pf) {
+    int16_t *p = (int16_t *)pf;
+    for (int y = 0; y < 4; ++y)
+        for (int x = 0; x < 12; ++x)
+            p[y * 12 + x] = t[y * pitch * 2 + x];
 }
 
 
 #ifdef NNEDI3_X86
-#define CB2(n) std::max(std::min((n),254),0)
-int32_t processLine0_maybeSSE2(const uint8_t *tempu, int width, uint8_t *dstp,
-        const uint8_t *src3p, const int src_pitch, const int max_value, const int) {
+#define CB2(n) std::max(std::min((n), 254), 0)
+int32_t processLine0_maybeSSE2(const uint8_t *tempu, int width, uint8_t *dstp, const uint8_t *src3p, const int src_pitch, const int max_value, const int) {
     int32_t count = 0;
     const int remain = width & 15;
     width -= remain;
     if (width)
         count = nnedi3_processLine0_SSE2(tempu, width, dstp, src3p, src_pitch);
+
     for (int x = width; x < width + remain; ++x) {
         if (tempu[x]) {
-            dstp[x] = CB2((19*(src3p[x+src_pitch*2]+src3p[x+src_pitch*4])-
-                        3*(src3p[x]+src3p[x+src_pitch*6])+16)>>5);
+            dstp[x] = CB2((19 * (src3p[x + src_pitch * 2] + src3p[x + src_pitch * 4]) - 3 * (src3p[x] + src3p[x + src_pitch * 6]) + 16) / 32);
         } else {
             dstp[x] = 255;
             ++count;
@@ -338,9 +327,7 @@ int32_t processLine0_maybeSSE2(const uint8_t *tempu, int width, uint8_t *dstp,
 // PixelType can be uint8_t, uint16_t, or float.
 // TempType can be int or float.
 template <typename PixelType, typename TempType>
-int32_t processLine0_C(const uint8_t *tempu, int width, uint8_t *dstp8,
-        const uint8_t *src3p8, const int src_pitch, const int max_value, const int chroma)
-{
+int32_t processLine0_C(const uint8_t *tempu, int width, uint8_t *dstp8, const uint8_t *src3p8, const int src_pitch, const int max_value, const int chroma) {
     PixelType *dstp = (PixelType *)dstp8;
     const PixelType *src3p = (const PixelType *)src3p8;
 
@@ -359,18 +346,14 @@ int32_t processLine0_C(const uint8_t *tempu, int width, uint8_t *dstp8,
     }
 
     int count = 0;
-    for (int x=0; x<width; ++x)
-    {
-        if (tempu[x])
-        {
-            TempType tmp = 19 * (src3p[x+src_pitch*2] + src3p[x+src_pitch*4]) - 3 * (src3p[x] + src3p[x+src_pitch*6]);
+    for (int x = 0; x < width; ++x) {
+        if (tempu[x]) {
+            TempType tmp = 19 * (src3p[x + src_pitch * 2] + src3p[x + src_pitch * 4]) - 3 * (src3p[x] + src3p[x + src_pitch * 6]);
             if (!std::is_same<TempType, float>::value)
                 tmp += 16;
             tmp /= 32;
             dstp[x] = std::max(std::min(tmp, maximum), minimum);
-        }
-        else
-        {
+        } else {
             memset(dstp + x, 255, sizeof(PixelType));
             ++count;
         }
@@ -379,59 +362,50 @@ int32_t processLine0_C(const uint8_t *tempu, int width, uint8_t *dstp8,
 }
 
 // new prescreener functions
-void byte2word64_C(const uint8_t *t, const int pitch, float *p)
-{
-    int16_t *ps = (int16_t*)p;
-    for (int y=0; y<4; ++y)
-        for (int x=0; x<16; ++x)
-            ps[y*16+x] = t[y*pitch*2+x];
+void byte2word64_C(const uint8_t *t, const int pitch, float *p) {
+    int16_t *ps = (int16_t *)p;
+    for (int y = 0; y < 4; ++y)
+        for (int x = 0; x < 16; ++x)
+            ps[y * 16 + x] = t[y * pitch * 2 + x];
 }
 
 
-void computeNetwork0new_C(const float *datai, const float *weights, uint8_t *d)
-{
-    int16_t *data = (int16_t*)datai;
-    int16_t *ws = (int16_t*)weights;
-    float *wf = (float*)&ws[4*64];
+void computeNetwork0new_C(const float *datai, const float *weights, uint8_t *d) {
+    int16_t *data = (int16_t *)datai;
+    int16_t *ws = (int16_t *)weights;
+    float *wf = (float *)&ws[4 * 64];
     float vals[8];
-    for (int i=0; i<4; ++i)
-    {
+    for (int i = 0; i < 4; ++i) {
         int sum = 0;
-        for (int j=0; j<64; ++j)
-            sum += data[j]*ws[(i<<3)+((j>>3)<<5)+(j&7)];
-        const float t = sum*wf[i]+wf[4+i];
-        vals[i] = t/(1.0f+fabsf(t));
+        for (int j = 0; j < 64; ++j)
+            sum += data[j] * ws[(i << 3) + ((j >> 3) << 5) + (j & 7)];
+        const float t = sum * wf[i] + wf[4 + i];
+        vals[i] = t / (1.0f + fabsf(t));
     }
-    for (int i=0; i<4; ++i)
-    {
+    for (int i = 0; i < 4; ++i) {
         float sum = 0.0f;
-        for (int j=0; j<4; ++j)
-            sum += vals[j]*wf[8+i+(j<<2)];
-        vals[4+i] = sum+wf[8+16+i];
+        for (int j = 0; j < 4; ++j)
+            sum += vals[j] * wf[8 + i + (j << 2)];
+        vals[4 + i] = sum + wf[8 + 16 + i];
     }
     int mask = 0;
-    for (int i=0; i<4; ++i)
-    {
-        if (vals[4+i]>0.0f)
-            mask |= (0x1<<(i<<3));
+    for (int i = 0; i < 4; ++i) {
+        if (vals[4 + i] > 0.0f)
+            mask |= (0x1 << (i << 3));
     }
-    ((int*)d)[0] = mask;
+    ((int *)d)[0] = mask;
 }
 
 
 template <typename PixelType>
-void evalFunc_0(void **instanceData, FrameData *frameData)
-{
-    nnedi3Data *d = (nnedi3Data*) * instanceData;
-
+void evalFunc_0(const nnedi3Data *d, FrameData *frameData) {
     float *input = frameData->input;
     const float *weights0 = d->weights0;
     float *temp = frameData->temp;
-    uint8_t *tempu = (uint8_t*)temp;
+    uint8_t *tempu = (uint8_t *)temp;
 
     // And now the actual work.
-    for (int plane = 0; plane < d->vi.format->numPlanes; ++plane)
-    {
+    for (int plane = 0; plane < d->vi.format->numPlanes; ++plane) {
         if (!d->process[plane])
             continue;
 
@@ -444,53 +418,42 @@ void evalFunc_0(void **instanceData, FrameData *frameData)
         PixelType *dstp = (PixelType *)frameData->dstp[plane];
         const int dst_stride = frameData->dst_stride[plane] / sizeof(PixelType);
 
-        for (int y = 1 - frameData->field[plane]; y < height - 12; y += 2) {
-            memcpy(dstp + y*dst_stride,
-                    srcp + 32 + (6+y)*src_stride,
-                    (width - 64) * sizeof(PixelType));
-        }
+        for (int y = 1 - frameData->field[plane]; y < height - 12; y += 2)
+            memcpy(dstp + y * dst_stride,
+                   srcp + 32 + (6 + y) * src_stride,
+                   (width - 64) * sizeof(PixelType));
 
         const int ystart = 6 + frameData->field[plane];
         const int ystop = height - 6;
-        srcp += ystart*src_stride;
-        dstp += (ystart-6)*dst_stride-32;
-        const PixelType *src3p = srcp - src_stride*3;
-        int32_t *lcount = frameData->lcount[plane]-6;
-        if (d->pscrn == 1) // original
-        {
-            for (int y=ystart; y<ystop; y+=2)
-            {
-                for (int x=32; x<width-32; ++x)
-                {
+        srcp += ystart * src_stride;
+        dstp += (ystart - 6) * dst_stride - 32;
+        const PixelType *src3p = srcp - src_stride * 3;
+        int32_t *lcount = frameData->lcount[plane] - 6;
+        if (d->pscrn == 1) {// original
+            for (int y = ystart; y < ystop; y += 2) {
+                for (int x = 32; x < width - 32; ++x) {
                     d->readPixels((const uint8_t *)(src3p + x - 5), src_stride, input);
                     d->computeNetwork0(input, weights0, tempu+x);
                 }
-                lcount[y] += d->processLine0(tempu+32, width-64, (uint8_t *)(dstp + 32), (const uint8_t *)(src3p + 32), src_stride, d->max_value, plane && d->vi.format->colorFamily != cmRGB);
-                src3p += src_stride*2;
-                dstp += dst_stride*2;
+                lcount[y] += d->processLine0(tempu + 32, width - 64, (uint8_t *)(dstp + 32), (const uint8_t *)(src3p + 32), src_stride, d->max_value, plane && d->vi.format->colorFamily != cmRGB);
+                src3p += src_stride * 2;
+                dstp += dst_stride * 2;
             }
-        }
-        else if (sizeof(PixelType) == 1 && d->pscrn >= 2) // new
-        {
-            for (int y=ystart; y<ystop; y+=2)
-            {
-                for (int x=32; x<width-32; x+=4)
-                {
-                    d->readPixels((const uint8_t *)(src3p+x-6),src_stride,input);
-                    d->computeNetwork0(input,weights0,tempu+x);
+        } else if (sizeof(PixelType) == 1 && d->pscrn >= 2) {// new
+            for (int y = ystart; y < ystop; y += 2) {
+                for (int x = 32; x < width - 32; x += 4) {
+                    d->readPixels((const uint8_t *)(src3p + x - 6), src_stride, input);
+                    d->computeNetwork0(input, weights0, tempu + x);
                 }
-                lcount[y] += d->processLine0(tempu+32,width-64,(uint8_t *)(dstp+32),(const uint8_t *)(src3p+32),src_stride, d->max_value, plane && d->vi.format->colorFamily != cmRGB);
-                src3p += src_stride*2;
-                dstp += dst_stride*2;
+                lcount[y] += d->processLine0(tempu + 32, width - 64, (uint8_t *)(dstp + 32), (const uint8_t *)(src3p + 32), src_stride, d->max_value, plane && d->vi.format->colorFamily != cmRGB);
+                src3p += src_stride * 2;
+                dstp += dst_stride * 2;
             }
-        }
-        else // no prescreening
-        {
-            for (int y=ystart; y<ystop; y+=2)
-            {
+        } else {// no prescreening
+            for (int y = ystart; y < ystop; y += 2) {
                 memset(dstp + 32, 255, (width - 64) * sizeof(PixelType));
-                lcount[y] += width-64;
-                dstp += dst_stride*2;
+                lcount[y] += width - 64;
+                dstp += dst_stride * 2;
             }
         }
     }
@@ -498,67 +461,57 @@ void evalFunc_0(void **instanceData, FrameData *frameData)
 
 
 template <typename PixelType, typename AccumType, typename FloatType>
-void extract_m8_C(const uint8_t *srcp8, const int stride, 
-        const int xdia, const int ydia, float *mstd, float *input)
-{
+void extract_m8_C(const uint8_t *srcp8, const int stride, const int xdia, const int ydia, float *mstd, float *input) {
     // uint8_t or uint16_t or float
     const PixelType *srcp = (const PixelType *)srcp8;
 
     // int32_t or int64_t or double
     AccumType sum = 0, sumsq = 0;
-    for (int y=0; y<ydia; ++y)
-    {
-        const PixelType *srcpT = srcp+y*stride*2;
-        for (int x=0; x<xdia; ++x, ++input)
-        {
+    for (int y = 0; y < ydia; ++y) {
+        const PixelType *srcpT = srcp + y * stride * 2;
+        for (int x = 0; x < xdia; ++x) {
             sum += srcpT[x];
             if (std::is_same<PixelType, float>::value)
                 sumsq += (double)srcpT[x] * srcpT[x];
             else
-                sumsq += (uint32_t)srcpT[x]*(uint32_t)srcpT[x];
-            input[0] = srcpT[x];
+                sumsq += (uint32_t)srcpT[x] * (uint32_t)srcpT[x];
+            input[x] = srcpT[x];
         }
     }
-    const float scale = 1.0f/(xdia*ydia);
-    mstd[0] = sum*scale;
+    const float scale = 1.0f / (xdia * ydia);
+    mstd[0] = sum * scale;
     // float or double or double
-    const FloatType tmp = (FloatType)sumsq*scale - (FloatType)mstd[0]*mstd[0];
+    const FloatType tmp = (FloatType)sumsq * scale - (FloatType)mstd[0] * mstd[0];
     mstd[3] = 0.0f;
     if (tmp <= FLT_EPSILON)
         mstd[1] = mstd[2] = 0.0f;
-    else
-    {
+    else {
         mstd[1] = (float)std::sqrt(tmp);
-        mstd[2] = 1.0f/mstd[1];
+        mstd[2] = 1.0f / mstd[1];
     }
 }
 
 
-void extract_m8_i16_C(const uint8_t *srcp, const int stride, 
-        const int xdia, const int ydia, float *mstd, float *inputf)
-{
-    int16_t *input = (int16_t*)inputf;
+void extract_m8_i16_C(const uint8_t *srcp, const int stride, const int xdia, const int ydia, float *mstd, float *inputf) {
+    int16_t *input = (int16_t *)inputf;
     int sum = 0, sumsq = 0;
-    for (int y=0; y<ydia; ++y)
-    {
-        const uint8_t *srcpT = srcp+y*stride*2;
-        for (int x=0; x<xdia; ++x, ++input)
-        {
+    for (int y = 0; y < ydia; ++y) {
+        const uint8_t *srcpT = srcp + y * stride * 2;
+        for (int x = 0; x < xdia; ++x) {
             sum += srcpT[x];
-            sumsq += srcpT[x]*srcpT[x];
-            input[0] = srcpT[x];
+            sumsq += srcpT[x] * srcpT[x];
+            input[x] = srcpT[x];
         }
     }
-    const float scale = 1.0f/(float)(xdia*ydia);
-    mstd[0] = sum*scale;
-    mstd[1] = sumsq*scale-mstd[0]*mstd[0];
+    const float scale = 1.0f / (float)(xdia * ydia);
+    mstd[0] = sum * scale;
+    mstd[1] = sumsq * scale - mstd[0] * mstd[0];
     mstd[3] = 0.0f;
     if (mstd[1] <= FLT_EPSILON)
         mstd[1] = mstd[2] = 0.0f;
-    else
-    {
+    else {
         mstd[1] = sqrtf(mstd[1]);
-        mstd[2] = 1.0f/mstd[1];
+        mstd[2] = 1.0f / mstd[1];
     }
 }
 
@@ -575,11 +528,9 @@ const float e0_mult = 12102203.161561486f; // (1.0/ln(2))*(2^23)
 const float e0_bias = 1064866805.0f; // (2^23)*127.0-486411.0
 
 
-void e0_m16_C(float *s, const int n)
-{
-    for (int i=0; i<n; ++i)
-    {
-        const int t = (int)(std::max(std::min(s[i],exp_hi),exp_lo)*e0_mult+e0_bias);
+void e0_m16_C(float *s, const int n) {
+    for (int i = 0; i < n; ++i) {
+        const int t = (int)(std::max(std::min(s[i], exp_hi), exp_lo) * e0_mult + e0_bias);
         memcpy(&s[i], &t, sizeof(float));
     }
 }
@@ -595,15 +546,13 @@ const float e1_c1 = 0.701277797f;
 const float e1_c2 = 0.237348593f;
 
 
-void e1_m16_C(float *s, const int n)
-{
-    for (int q=0; q<n; ++q)
-    {
-        float x = std::max(std::min(s[q],exp_hi),exp_lo)*e1_scale;
+void e1_m16_C(float *s, const int n) {
+    for (int q = 0; q < n; ++q) {
+        float x = std::max(std::min(s[q], exp_hi), exp_lo) * e1_scale;
         int i = (int)(x + 128.5f) - 128;
         x -= i;
-        x = e1_c0 + e1_c1*x + e1_c2*x*x;
-        i = (i+127)<<23;
+        x = e1_c0 + e1_c1 * x + e1_c2 * x * x;
+        i = (i + 127) << 23;
         float i_f;
         memcpy(&i_f, &i, sizeof(float));
         s[q] = x * i_f;
@@ -611,10 +560,9 @@ void e1_m16_C(float *s, const int n)
 }
 
 
-void e2_m16_C(float *s, const int n)
-{
-    for (int i=0; i<n; ++i)
-        s[i] = expf(std::max(std::min(s[i],exp_hi),exp_lo));
+void e2_m16_C(float *s, const int n) {
+    for (int i = 0; i < n; ++i)
+        s[i] = expf(std::max(std::min(s[i], exp_hi), exp_lo));
 }
 
 // exp from Intel Approximate Math (AM) Library
@@ -623,39 +571,33 @@ void e2_m16_C(float *s, const int n)
 const float min_weight_sum = 1e-10f;
 
 
-void weightedAvgElliottMul5_m16_C(const float *w, const int n, float *mstd)
-{
+void weightedAvgElliottMul5_m16_C(const float *w, const int n, float *mstd) {
     float vsum = 0.0f, wsum = 0.0f;
-    for (int i=0; i<n; ++i)
-    {
-        vsum += w[i]*(w[n+i]/(1.0f+fabsf(w[n+i])));
+    for (int i = 0; i < n; ++i) {
+        vsum += w[i] * (w[n + i] / (1.0f + fabsf(w[n + i])));
         wsum += w[i];
     }
     if (wsum > min_weight_sum)
-        mstd[3] += ((5.0f*vsum)/wsum)*mstd[1]+mstd[0];
+        mstd[3] += ((5.0f * vsum) / wsum) * mstd[1] + mstd[0];
     else
         mstd[3] += mstd[0];
 }
 
 
 template <typename PixelType>
-void evalFunc_1(void **instanceData, FrameData *frameData)
-{
-    nnedi3Data *d = (nnedi3Data*) * instanceData;
-
+void evalFunc_1(const nnedi3Data *d, FrameData *frameData) {
     float *input = frameData->input;
     float *temp = frameData->temp;
-    float **weights1 = d->weights1;
+    const float * const *weights1 = d->weights1;
     const int qual = d->qual;
     const int asize = d->asize;
     const int nns = d->nns;
     const int xdia = d->xdia;
     const int xdiad2m1 = (xdia / 2) - 1;
     const int ydia = d->ydia;
-    const float scale = 1.0f/(float)qual;
+    const float scale = 1.0f / (float)qual;
 
-    for (int plane = 0; plane < d->vi.format->numPlanes; ++plane)
-    {
+    for (int plane = 0; plane < d->vi.format->numPlanes; ++plane) {
         if (!d->process[plane])
             continue;
 
@@ -671,14 +613,12 @@ void evalFunc_1(void **instanceData, FrameData *frameData)
         const int ystart = frameData->field[plane];
         const int ystop = height - 12;
 
-        srcp += (ystart+6)*src_stride;
-        dstp += ystart*dst_stride-32;
-        const PixelType *srcpp = srcp - (ydia-1)*src_stride - xdiad2m1;
+        srcp += (ystart + 6) * src_stride;
+        dstp += ystart * dst_stride - 32;
+        const PixelType *srcpp = srcp - (ydia - 1) * src_stride - xdiad2m1;
 
-        for (int y=ystart; y<ystop; y+=2)
-        {
-            for (int x=32; x<width-32; ++x)
-            {
+        for (int y = ystart; y < ystop; y += 2) {
+            for (int x = 32; x < width - 32; ++x) {
                 uint32_t pixel = 0;
                 memcpy(&pixel, dstp + x, sizeof(PixelType));
 
@@ -690,9 +630,8 @@ void evalFunc_1(void **instanceData, FrameData *frameData)
 
                 float mstd[4];
                 d->extract((const uint8_t *)(srcpp + x), src_stride, xdia, ydia, mstd, input);
-                for (int i=0; i<qual; ++i)
-                {
-                    d->dotProd(input, weights1[i], temp, nns*2, asize, mstd+2);
+                for (int i = 0; i < qual; ++i) {
+                    d->dotProd(input, weights1[i], temp, nns * 2, asize, mstd + 2);
                     d->expfunc(temp, nns);
                     d->wae5(temp, nns, mstd);
                 }
@@ -705,13 +644,13 @@ void evalFunc_1(void **instanceData, FrameData *frameData)
                         maximum = 0.5f;
                     }
 
-                    dstp[x] = std::min(std::max(mstd[3]*scale, minimum), maximum);
+                    dstp[x] = std::min(std::max(mstd[3] * scale, minimum), maximum);
                 } else {
-                    dstp[x] = std::min(std::max((int)(mstd[3]*scale+0.5f), 0), d->max_value);
+                    dstp[x] = std::min(std::max((int)(mstd[3] * scale + 0.5f), 0), d->max_value);
                 }
             }
-            srcpp += src_stride*2;
-            dstp += dst_stride*2;
+            srcpp += src_stride * 2;
+            dstp += dst_stride * 2;
         }
     }
 }
@@ -721,27 +660,24 @@ void evalFunc_1(void **instanceData, FrameData *frameData)
 #define NUM_NNS 5
 
 
-int roundds(const double f)
-{
-    if (f-floor(f) >= 0.5)
-        return std::min((int)ceil(f),32767);
-    return std::max((int)floor(f),-32768);
+int roundds(const double f) {
+    if (f - floor(f) >= 0.5)
+        return std::min((int)ceil(f), 32767);
+    return std::max((int)floor(f), -32768);
 }
 
 
-void shufflePreScrnL2L3(float *wf, float *rf, const int opt)
-{
-    for (int j=0; j<4; ++j)
-        for (int k=0; k<4; ++k)
-            wf[k*4+j] = rf[j*4+k];
-    rf += 4*5;
-    wf += 4*5;
+void shufflePreScrnL2L3(float *wf, float *rf) {
+    for (int j = 0; j < 4; ++j)
+        for (int k = 0; k < 4; ++k)
+            wf[k * 4 + j] = rf[j * 4 + k];
+    rf += 4 * 5;
+    wf += 4 * 5;
     const int jtable[4] = { 0, 2, 1, 3 };
-    for (int j=0; j<4; ++j)
-    {
-        for (int k=0; k<8; ++k)
-            wf[k*4+j] = rf[jtable[j]*8+k];
-        wf[4*8+j] = rf[4*8+jtable[j]];
+    for (int j = 0; j < 4; ++j) {
+        for (int k = 0; k < 8; ++k)
+            wf[k * 4 + j] = rf[jtable[j] * 8 + k];
+        wf[4 * 8 + j] = rf[4 * 8 + jtable[j]];
     }
 }
 
@@ -791,13 +727,12 @@ static void selectFunctions(nnedi3Data *d) {
             d->dotProd = dotProd_C;
         }
 
-        if ((d->fapprox & 12) == 0) { // use slow exp
+        if ((d->fapprox & 12) == 0) // use slow exp
             d->expfunc = e2_m16_C;
-        } else if ((d->fapprox & 12) == 4) { // use faster exp
+        else if ((d->fapprox & 12) == 4) // use faster exp
             d->expfunc = e1_m16_C;
-        } else { // use fastest exp
+        else // use fastest exp
             d->expfunc = e0_m16_C;
-        }
 
 #if defined(NNEDI3_X86)
         if (d->opt) {
@@ -889,13 +824,12 @@ static void selectFunctions(nnedi3Data *d) {
         d->extract = extract_m8_C<uint16_t, int64_t, double>;
         d->dotProd = dotProd_C;
 
-        if ((d->fapprox & 12) == 0) { // use slow exp
+        if ((d->fapprox & 12) == 0) // use slow exp
             d->expfunc = e2_m16_C;
-        } else if ((d->fapprox & 12) == 4) { // use faster exp
+        else if ((d->fapprox & 12) == 4) // use faster exp
             d->expfunc = e1_m16_C;
-        } else { // use fastest exp
+        else // use fastest exp
             d->expfunc = e0_m16_C;
-        }
 
 #if defined(NNEDI3_X86)
         if (d->opt) {
@@ -952,13 +886,12 @@ static void selectFunctions(nnedi3Data *d) {
         d->extract = extract_m8_C<float, double, double>;
         d->dotProd = dotProd_C;
 
-        if ((d->fapprox & 12) == 0) { // use slow exp
+        if ((d->fapprox & 12) == 0) // use slow exp
             d->expfunc = e2_m16_C;
-        } else if ((d->fapprox & 12) == 4) { // use faster exp
+        else if ((d->fapprox & 12) == 4) // use faster exp
             d->expfunc = e1_m16_C;
-        } else { // use fastest exp
+        else // use fastest exp
             d->expfunc = e0_m16_C;
-        }
 
 #if defined(NNEDI3_X86)
         if (d->opt) {
@@ -1072,106 +1005,90 @@ static void VS_CC nnedi3Init(VSMap *in, VSMap *out, void **instanceData, VSNode 
     const int ydiaTable[NUM_NSIZE] = { 6, 6, 6, 6, 4, 4, 4 };
     const int nnsTable[NUM_NNS] = { 16, 32, 64, 128, 256 };
 
-    const int dims0 = 49*4+5*4+9*4;
-    const int dims0new = 4*65+4*5;
-    const int dims1 = nnsTable[d->nnsparam]*2*(xdiaTable[d->nsize]*ydiaTable[d->nsize]+1);
+    const int dims0 = 49 * 4 + 5 * 4 + 9 * 4;
+    const int dims0new = 4 * 65 + 4 * 5;
+    const int dims1 = nnsTable[d->nnsparam] * 2 * (xdiaTable[d->nsize] * ydiaTable[d->nsize] + 1);
     int dims1tsize = 0;
     int dims1offset = 0;
 
-    for (int j=0; j<NUM_NNS; ++j)
-    {
-        for (int i=0; i<NUM_NSIZE; ++i)
-        {
-            if (i == d->nsize && j == d->nnsparam) {
+    for (int j = 0; j < NUM_NNS; ++j) {
+        for (int i = 0; i < NUM_NSIZE; ++i) {
+            if (i == d->nsize && j == d->nnsparam)
                 dims1offset = dims1tsize;
-            }
-            dims1tsize += nnsTable[j]*2*(xdiaTable[i]*ydiaTable[i]+1)*2;
+            dims1tsize += nnsTable[j] * 2 * (xdiaTable[i] * ydiaTable[i] + 1) * 2;
         }
     }
 
     d->weights0 = vs_aligned_malloc<float>(std::max(dims0, dims0new) * sizeof(float), 16);
 
     for (int i = 0; i < 2; ++i)
-    {
         d->weights1[i] = vs_aligned_malloc<float>(dims1 * sizeof(float), 16);
-    }
 
 
     // Adjust prescreener weights
-    if (d->pscrn >= 2) // using new prescreener
-    {
-        int *offt = (int*)calloc(4*64,sizeof(int));
-        for (int j=0; j<4; ++j)
-            for (int k=0; k<64; ++k)
-                offt[j*64+k] = ((k>>3)<<5)+((j&3)<<3)+(k&7);
-        const float *bdw = bdata+dims0+dims0new*(d->pscrn-2);
-        int16_t *ws = (int16_t*)d->weights0;
-        float *wf = (float*)&ws[4*64];
+    if (d->pscrn >= 2) {// using new prescreener
+        int *offt = (int *)calloc(4 * 64, sizeof(int));
+        for (int j = 0; j < 4; ++j)
+            for (int k = 0; k < 64; ++k)
+                offt[j * 64 + k] = ((k >> 3) << 5) + ((j & 3) << 3) + (k & 7);
+        const float *bdw = bdata + dims0 + dims0new * (d->pscrn - 2);
+        int16_t *ws = (int16_t *)d->weights0;
+        float *wf = (float *)&ws[4 * 64];
         double mean[4] = { 0.0, 0.0, 0.0, 0.0 };
         // Calculate mean weight of each first layer neuron
-        for (int j=0; j<4; ++j)
-        {
+        for (int j = 0; j < 4; ++j) {
             double cmean = 0.0;
-            for (int k=0; k<64; ++k)
-                cmean += bdw[offt[j*64+k]];
-            mean[j] = cmean/64.0;
+            for (int k = 0; k < 64; ++k)
+                cmean += bdw[offt[j * 64 + k]];
+            mean[j] = cmean / 64.0;
         }
         // Factor mean removal and 1.0/127.5 scaling 
         // into first layer weights. scale to int16 range
-        for (int j=0; j<4; ++j)
-        {
+        for (int j = 0; j < 4; ++j) {
             double mval = 0.0;
-            for (int k=0; k<64; ++k)
-                mval = std::max(mval,fabs((bdw[offt[j*64+k]]-mean[j])/127.5));
-            const double scale = 32767.0/mval;
-            for (int k=0; k<64; ++k)
-                ws[offt[j*64+k]] = roundds(((bdw[offt[j*64+k]]-mean[j])/127.5)*scale);
-            wf[j] = (float)(mval/32767.0);
+            for (int k = 0; k < 64; ++k)
+                mval = std::max(mval, fabs((bdw[offt[j * 64 + k]] - mean[j]) / 127.5));
+            const double scale = 32767.0 / mval;
+            for (int k = 0; k < 64; ++k)
+                ws[offt[j * 64 + k]] = roundds(((bdw[offt[j * 64 + k]] - mean[j]) / 127.5) * scale);
+            wf[j] = (float)(mval / 32767.0);
         }
-        memcpy(wf+4,bdw+4*64,(dims0new-4*64)*sizeof(float));
+        memcpy(wf + 4, bdw + 4 * 64, (dims0new - 4 * 64) * sizeof(float));
         free(offt);
-    }
-    else // using old prescreener
-    {
+    } else {// using old prescreener
         double mean[4] = { 0.0, 0.0, 0.0, 0.0 };
         // Calculate mean weight of each first layer neuron
-        for (int j=0; j<4; ++j)
-        {
+        for (int j = 0; j < 4; ++j) {
             double cmean = 0.0;
-            for (int k=0; k<48; ++k)
-                cmean += bdata[j*48+k];
-            mean[j] = cmean/48.0;
+            for (int k = 0; k < 48; ++k)
+                cmean += bdata[j * 48 + k];
+            mean[j] = cmean / 48.0;
         }
-        if (d->fapprox & 1) // use int16 dot products in first layer
-        {
-            int16_t *ws = (int16_t*)d->weights0;
-            float *wf = (float*)&ws[4*48];
+        if (d->fapprox & 1) {// use int16 dot products in first layer
+            int16_t *ws = (int16_t *)d->weights0;
+            float *wf = (float *)&ws[4 * 48];
             // Factor mean removal and 1.0/127.5 scaling 
             // into first layer weights. scale to int16 range
-            for (int j=0; j<4; ++j)
-            {
+            for (int j = 0; j < 4; ++j) {
                 double mval = 0.0;
-                for (int k=0; k<48; ++k)
-                    mval = std::max(mval,fabs((bdata[j*48+k]-mean[j])/127.5));
-                const double scale = 32767.0/mval;
-                for (int k=0; k<48; ++k)
-                    ws[j*48+k] = roundds(((bdata[j*48+k]-mean[j])/127.5)*scale);
-                wf[j] = (float)(mval/32767.0);
+                for (int k = 0; k < 48; ++k)
+                    mval = std::max(mval, fabs((bdata[j * 48 + k] - mean[j]) / 127.5));
+                const double scale = 32767.0 / mval;
+                for (int k = 0; k < 48; ++k)
+                    ws[j * 48 + k] = roundds(((bdata[j * 48 + k] - mean[j]) / 127.5) * scale);
+                wf[j] = (float)(mval / 32767.0);
             }
-            memcpy(wf+4,bdata+4*48,(dims0-4*48)*sizeof(float));
-            if (d->opt) // shuffle weight order for asm
-            {
-                int16_t *rs = (int16_t*)malloc(dims0*sizeof(float));
-                memcpy(rs,d->weights0,dims0*sizeof(float));
-                for (int j=0; j<4; ++j)
-                    for (int k=0; k<48; ++k)
-                        ws[(k>>3)*32+j*8+(k&7)] = rs[j*48+k];
-                shufflePreScrnL2L3(wf+8,((float*)&rs[4*48])+8,d->opt);
+            memcpy(wf + 4, bdata + 4 * 48, (dims0 - 4 * 48) * sizeof(float));
+            if (d->opt) {// shuffle weight order for asm
+                int16_t *rs = (int16_t *)malloc(dims0 * sizeof(float));
+                memcpy(rs, d->weights0, dims0 * sizeof(float));
+                for (int j = 0; j < 4; ++j)
+                    for (int k = 0; k < 48; ++k)
+                        ws[(k >> 3) * 32 + j * 8 + (k & 7)] = rs[j * 48 + k];
+                shufflePreScrnL2L3(wf + 8, ((float *)&rs[4 * 48]) + 8);
                 free(rs);
             }
-        }
-        else // use float dot products in first layer
-        {
+        } else {// use float dot products in first layer
             double half = (1 << d->vi.format->bitsPerSample) - 1;
             if (d->vi.format->sampleType == stFloat)
                 half = 1.0;
@@ -1179,103 +1096,92 @@ static void VS_CC nnedi3Init(VSMap *in, VSMap *out, void **instanceData, VSNode 
 
             // Factor mean removal and 1.0/half scaling
             // into first layer weights.
-            for (int j=0; j<4; ++j)
-                for (int k=0; k<48; ++k)
-                    d->weights0[j*48+k] = (float)((bdata[j*48+k]-mean[j]) / half);
-            memcpy(d->weights0+4*48,bdata+4*48,(dims0-4*48)*sizeof(float));
-            if (d->opt) // shuffle weight order for asm
-            {
+            for (int j = 0; j < 4; ++j)
+                for (int k = 0; k < 48; ++k)
+                    d->weights0[j * 48 + k] = (float)((bdata[j * 48 + k] - mean[j]) / half);
+            memcpy(d->weights0 + 4 * 48, bdata + 4 * 48, (dims0 - 4 * 48) * sizeof(float));
+            if (d->opt) {// shuffle weight order for asm
                 float *wf = d->weights0;
-                float *rf = (float*)malloc(dims0*sizeof(float));
-                memcpy(rf,d->weights0,dims0*sizeof(float));
-                for (int j=0; j<4; ++j)
-                    for (int k=0; k<48; ++k)
-                        wf[(k>>2)*16+j*4+(k&3)] = rf[j*48+k];
-                shufflePreScrnL2L3(wf+4*49,rf+4*49,d->opt);
+                float *rf = (float *)malloc(dims0 * sizeof(float));
+                memcpy(rf, d->weights0, dims0 * sizeof(float));
+                for (int j = 0; j < 4; ++j)
+                    for (int k = 0; k < 48; ++k)
+                        wf[(k >> 2) * 16 + j * 4 + (k & 3)] = rf[j * 48 + k];
+                shufflePreScrnL2L3(wf + 4 * 49, rf + 4 * 49);
                 free(rf);
             }
         }
     }
 
     // Adjust prediction weights
-    for (int i=0; i<2; ++i)
-    {
-        const float *bdataT = bdata+dims0+dims0new*3+dims1tsize*d->etype+dims1offset+i*dims1;
+    for (int i = 0; i < 2; ++i) {
+        const float *bdataT = bdata + dims0 + dims0new * 3 + dims1tsize * d->etype + dims1offset + i * dims1;
         const int nnst = nnsTable[d->nnsparam];
-        const int asize = xdiaTable[d->nsize]*ydiaTable[d->nsize];
-        const int boff = nnst*2*asize;
-        double *mean = (double*)calloc(asize+1+nnst*2,sizeof(double));
+        const int asize = xdiaTable[d->nsize] * ydiaTable[d->nsize];
+        const int boff = nnst * 2 * asize;
+        double *mean = (double *)calloc(asize + 1 + nnst * 2, sizeof(double));
         // Calculate mean weight of each neuron (ignore bias)
-        for (int j=0; j<nnst*2; ++j)
-        {
+        for (int j = 0; j < nnst * 2; ++j) {
             double cmean = 0.0;
-            for (int k=0; k<asize; ++k)
-                cmean += bdataT[j*asize+k];
-            mean[asize+1+j] = cmean/(double)asize;
+            for (int k = 0; k < asize; ++k)
+                cmean += bdataT[j * asize + k];
+            mean[asize + 1 + j] = cmean / (double)asize;
         }
         // Calculate mean softmax neuron
-        for (int j=0; j<nnst; ++j)
-        {
-            for (int k=0; k<asize; ++k)
-                mean[k] += bdataT[j*asize+k]-mean[asize+1+j];
-            mean[asize] += bdataT[boff+j];
+        for (int j = 0; j < nnst; ++j) {
+            for (int k = 0; k < asize; ++k)
+                mean[k] += bdataT[j * asize + k] - mean[asize + 1 + j];
+            mean[asize] += bdataT[boff + j];
         }
-        for (int j=0; j<asize+1; ++j)
+        for (int j = 0; j < asize + 1; ++j)
             mean[j] /= (double)(nnst);
-        if (d->fapprox&2) // use int16 dot products
-        {
-            int16_t *ws = (int16_t*)d->weights1[i];
-            float *wf = (float*)&ws[nnst*2*asize];
+
+        if (d->fapprox & 2) {// use int16 dot products
+            int16_t *ws = (int16_t *)d->weights1[i];
+            float *wf = (float *)&ws[nnst * 2 * asize];
             // Factor mean removal into weights, remove global offset from
             // softmax neurons, and scale weights to int16 range.
-            for (int j=0; j<nnst; ++j) // softmax neurons
-            {
+            for (int j = 0; j < nnst; ++j) {// softmax neurons
                 double mval = 0.0;
-                for (int k=0; k<asize; ++k)
-                    mval = std::max(mval,fabs(bdataT[j*asize+k]-mean[asize+1+j]-mean[k]));
-                const double scale = 32767.0/mval;
-                for (int k=0; k<asize; ++k)
-                    ws[j*asize+k] = roundds((bdataT[j*asize+k]-mean[asize+1+j]-mean[k])*scale);
-                wf[(j>>2)*8+(j&3)] = (float)(mval/32767.0);
-                wf[(j>>2)*8+(j&3)+4] = (float)(bdataT[boff+j]-mean[asize]);
+                for (int k = 0; k < asize; ++k)
+                    mval = std::max(mval, fabs(bdataT[j * asize + k] - mean[asize + 1 + j] - mean[k]));
+                const double scale = 32767.0 / mval;
+                for (int k = 0; k < asize; ++k)
+                    ws[j * asize + k] = roundds((bdataT[j * asize + k] - mean[asize + 1 + j] - mean[k]) * scale);
+                wf[(j >> 2) * 8 + (j & 3)] = (float)(mval / 32767.0);
+                wf[(j >> 2) * 8 + (j & 3) + 4] = (float)(bdataT[boff + j] - mean[asize]);
             }
-            for (int j=nnst; j<nnst*2; ++j) // elliott neurons
-            {
+            for (int j = nnst; j < nnst * 2; ++j) {// elliott neurons
                 double mval = 0.0;
-                for (int k=0; k<asize; ++k)
-                    mval = std::max(mval,fabs(bdataT[j*asize+k]-mean[asize+1+j]));
-                const double scale = 32767.0/mval;
-                for (int k=0; k<asize; ++k)
-                    ws[j*asize+k] = roundds((bdataT[j*asize+k]-mean[asize+1+j])*scale);
-                wf[(j>>2)*8+(j&3)] = (float)(mval/32767.0);
-                wf[(j>>2)*8+(j&3)+4] = bdataT[boff+j];
+                for (int k = 0; k < asize; ++k)
+                    mval = std::max(mval, fabs(bdataT[j * asize + k] - mean[asize + 1 + j]));
+                const double scale = 32767.0 / mval;
+                for (int k = 0; k < asize; ++k)
+                    ws[j * asize + k] = roundds((bdataT[j * asize + k] - mean[asize + 1 + j]) * scale);
+                wf[(j >> 2) * 8 + (j & 3)] = (float)(mval / 32767.0);
+                wf[(j >> 2) * 8 + (j & 3) + 4] = bdataT[boff + j];
             }
-            if (d->opt) // shuffle weight order for asm
-            {
-                int16_t *rs = (int16_t*)malloc(nnst*2*asize*sizeof(int16_t));
-                memcpy(rs,ws,nnst*2*asize*sizeof(int16_t));
-                for (int j=0; j<nnst*2; ++j)
-                    for (int k=0; k<asize; ++k)
-                        ws[(j>>2)*asize*4+(k>>3)*32+(j&3)*8+(k&7)] = rs[j*asize+k];
+            if (d->opt) {// shuffle weight order for asm
+                int16_t *rs = (int16_t *)malloc(nnst * 2 * asize * sizeof(int16_t));
+                memcpy(rs, ws, nnst * 2 * asize * sizeof(int16_t));
+                for (int j = 0; j < nnst * 2; ++j)
+                    for (int k = 0; k < asize; ++k)
+                        ws[(j >> 2) * asize * 4 + (k >> 3) * 32 + (j & 3) * 8 + (k & 7)] = rs[j * asize + k];
                 free(rs);
             }
-        }
-        else // use float dot products
-        {
+        } else {// use float dot products
             // Factor mean removal into weights, and remove global
             // offset from softmax neurons.
-            for (int j=0; j<nnst*2; ++j)
-            {
-                for (int k=0; k<asize; ++k)
-                {
+            for (int j = 0; j < nnst * 2; ++j) {
+                for (int k = 0; k < asize; ++k) {
                     const double q = j < nnst ? mean[k] : 0.0;
                     if (d->opt) // shuffle weight order for asm
-                        d->weights1[i][(j>>2)*asize*4+(k>>2)*16+(j&3)*4+(k&3)] = 
-                            (float)(bdataT[j*asize+k]-mean[asize+1+j]-q);
+                        d->weights1[i][(j >> 2) * asize * 4 + (k >> 2) * 16 + (j & 3) * 4 + (k & 3)] =
+                            (float)(bdataT[j * asize + k] - mean[asize + 1 + j] - q);
                     else
-                        d->weights1[i][j*asize+k] = (float)(bdataT[j*asize+k]-mean[asize+1+j]-q);
+                        d->weights1[i][j * asize + k] = (float)(bdataT[j * asize + k] - mean[asize + 1 + j] - q);
                 }
-                d->weights1[i][boff+j] = (float)(bdataT[boff+j]-(j<nnst?mean[asize]:0.0));
+                d->weights1[i][boff + j] = (float)(bdataT[boff + j] - (j < nnst ? mean[asize] : 0.0));
             }
         }
         free(mean);
@@ -1290,16 +1196,15 @@ static void VS_CC nnedi3Init(VSMap *in, VSMap *out, void **instanceData, VSNode 
 }
 
 
-int modnpf(const int m, const int n)
-{
-    if ((m%n) == 0)
+int modnpf(const int m, const int n) {
+    if ((m % n) == 0)
         return m;
-    return m+n-(m%n);
+    return m + n - (m % n);
 }
 
 
 static const VSFrameRef *VS_CC nnedi3GetFrame(int n, int activationReason, void **instanceData, void **fData, VSFrameContext *frameCtx, VSCore *core, const VSAPI *vsapi) {
-    nnedi3Data *d = (nnedi3Data *) * instanceData;
+    const nnedi3Data *d = (const nnedi3Data *) * instanceData;
 
     if (activationReason == arInitial) {
         vsapi->requestFrameFilter(d->field > 1 ? n / 2 : n, d->node, frameCtx);
@@ -1366,14 +1271,14 @@ static const VSFrameRef *VS_CC nnedi3GetFrame(int n, int activationReason, void 
         frameData->temp = vs_aligned_malloc<float>(temp_size, 16);
 
         // Copy src to a padded "frame" in frameData and mirror the edges.
-        d->copyPad(src, frameData, instanceData, field_n, vsapi);
+        d->copyPad(src, frameData, d, field_n, vsapi);
 
 
         // Handles prescreening and the cubic interpolation.
-        d->evalFunc_0(instanceData, frameData);
+        d->evalFunc_0(d, frameData);
 
         // The rest.
-        d->evalFunc_1(instanceData, frameData);
+        d->evalFunc_1(d, frameData);
 
 
         // Clean up.
@@ -1416,9 +1321,8 @@ static void VS_CC nnedi3Free(void *instanceData, VSCore *core, const VSAPI *vsap
 
     vs_aligned_free(d->weights0);
 
-    for (int i = 0; i < 2; i++) {
+    for (int i = 0; i < 2; i++)
         vs_aligned_free(d->weights1[i]);
-    }
 
     free(d);
 }
@@ -1500,19 +1404,16 @@ static void VS_CC nnedi3Create(const VSMap *in, VSMap *out, void *userData, VSCo
     }
 
     d.nsize = int64ToIntS(vsapi->propGetInt(in, "nsize", 0, &err));
-    if (err) {
+    if (err)
         d.nsize = 6;
-    }
 
     d.nnsparam = int64ToIntS(vsapi->propGetInt(in, "nns", 0, &err));
-    if (err) {
+    if (err)
         d.nnsparam = 1;
-    }
 
     d.qual = int64ToIntS(vsapi->propGetInt(in, "qual", 0, &err));
-    if (err) {
+    if (err)
         d.qual = 1;
-    }
 
     d.etype = int64ToIntS(vsapi->propGetInt(in, "etype", 0, &err));
 
@@ -1526,9 +1427,8 @@ static void VS_CC nnedi3Create(const VSMap *in, VSMap *out, void *userData, VSCo
 
     d.opt = !!vsapi->propGetInt(in, "opt", 0, &err);
 #if defined(NNEDI3_X86) || defined(NNEDI3_ARM)
-    if (err) {
+    if (err)
         d.opt = 1;
-    }
 #else
     d.opt = 0;
 #endif
@@ -1620,9 +1520,8 @@ static void VS_CC nnedi3Create(const VSMap *in, VSMap *out, void *userData, VSCo
         muldivRational(&d.vi.fpsNum, &d.vi.fpsDen, 2, 1);
     }
 
-    if (d.dh) {
+    if (d.dh)
         d.vi.height *= 2;
-    }
 
     d.max_value = 65535 >> (16 - d.vi.format->bitsPerSample);
 
