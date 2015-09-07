@@ -1,4 +1,4 @@
-AC_INIT([nnedi3], [3], [https://github.com/dubhater/vapoursynth-nnedi3/issues], [nnedi3], [https://github.com/dubhater/vapoursynth-nnedi3/])
+AC_INIT([nnedi3], [6], [https://github.com/dubhater/vapoursynth-nnedi3/issues], [nnedi3], [https://github.com/dubhater/vapoursynth-nnedi3/])
 
 : ${CXXFLAGS=""}
 

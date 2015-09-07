@@ -1536,7 +1536,7 @@ static void VS_CC nnedi3Create(const VSMap *in, VSMap *out, void *userData, VSCo
 
 
 VS_EXTERNAL_API(void) VapourSynthPluginInit(VSConfigPlugin configFunc, VSRegisterFunction registerFunc, VSPlugin *plugin) {
-    configFunc("com.deinterlace.nnedi3", "nnedi3", "Neural network edge directed interpolation", VAPOURSYNTH_API_VERSION, 1, plugin);
+    configFunc("com.deinterlace.nnedi3", "nnedi3", "Neural network edge directed interpolation (3rd gen.), v" PACKAGE_VERSION, VAPOURSYNTH_API_VERSION, 1, plugin);
     registerFunc("nnedi3",
             "clip:clip;"
             "field:int;"
