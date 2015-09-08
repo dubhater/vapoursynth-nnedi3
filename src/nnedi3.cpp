@@ -477,6 +477,7 @@ void extract_m8_C(const uint8_t *srcp8, const int stride, const int xdia, const 
                 sumsq += (uint32_t)srcpT[x] * (uint32_t)srcpT[x];
             input[x] = srcpT[x];
         }
+        input += xdia;
     }
     const float scale = 1.0f / (xdia * ydia);
     mstd[0] = sum * scale;
@@ -502,6 +503,7 @@ void extract_m8_i16_C(const uint8_t *srcp, const int stride, const int xdia, con
             sumsq += srcpT[x] * srcpT[x];
             input[x] = srcpT[x];
         }
+        input += xdia;
     }
     const float scale = 1.0f / (float)(xdia * ydia);
     mstd[0] = sum * scale;
