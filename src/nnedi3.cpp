@@ -809,7 +809,7 @@ static void selectFunctions(nnedi3Data *d) {
                 d->dotProd = dotProd_neon;
         }
 #endif
-    } else if (d->vi.format->sampleType == stInteger && d->vi.format->bitsPerSample == 16) {
+    } else if (d->vi.format->sampleType == stInteger && d->vi.format->bitsPerSample <= 16) {
         d->copyPad = copyPad<uint16_t>;
         d->evalFunc_0 = evalFunc_0<uint16_t>;
         d->evalFunc_1 = evalFunc_1<uint16_t>;
