@@ -335,24 +335,16 @@ int32_t processLine0_C(const uint8_t *tempu, int width, uint8_t *dstp8, const ui
     TempType maximum = max_value - 1;
     // Technically the -1 is only needed for 8 and 16 bit input.
 
-    if (std::is_same<PixelType, float>::value) {
-        if (chroma) {
-            minimum = -0.5f;
-            maximum = 0.5f;
-        } else {
-            minimum = 0.0f;
-            maximum = 1.0f;
-        }
-    }
-
     int count = 0;
     for (int x = 0; x < width; ++x) {
         if (tempu[x]) {
             TempType tmp = 19 * (src3p[x + src_pitch * 2] + src3p[x + src_pitch * 4]) - 3 * (src3p[x] + src3p[x + src_pitch * 6]);
-            if (!std::is_same<TempType, float>::value)
-                tmp += 16;
-            tmp /= 32;
-            dstp[x] = std::max(std::min(tmp, maximum), minimum);
+            if (std::is_same<TempType, float>::value) {
+                dstp[x] = tmp / 32;
+            } else {
+                tmp = (tmp + 16) / 32;
+                dstp[x] = std::max(std::min(tmp, maximum), minimum);
+            }
         } else {
             memset(dstp + x, 255, sizeof(PixelType));
             ++count;
@@ -638,18 +630,10 @@ void evalFunc_1(const nnedi3Data *d, FrameData *frameData) {
                     d->wae5(temp, nns, mstd);
                 }
 
-                if (std::is_same<PixelType, float>::value) {
-                    float minimum = 0.0f;
-                    float maximum = 1.0f;
-                    if (plane && d->vi.format->colorFamily != cmRGB) {
-                        minimum = -0.5f;
-                        maximum = 0.5f;
-                    }
-
-                    dstp[x] = std::min(std::max(mstd[3] * scale, minimum), maximum);
-                } else {
+                if (std::is_same<PixelType, float>::value)
+                    dstp[x] = mstd[3] * scale;
+                else
                     dstp[x] = std::min(std::max((int)(mstd[3] * scale + 0.5f), 0), d->max_value);
-                }
             }
             srcpp += src_stride * 2;
             dstp += dst_stride * 2;
