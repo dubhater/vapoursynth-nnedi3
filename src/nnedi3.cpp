@@ -45,51 +45,51 @@
 #if defined(NNEDI3_X86)
 // Functions implemented in nnedi3.asm
 extern "C" {
-    extern void nnedi3_byte2float48_SSE2(const uint8_t *t, const int pitch, float *p);
-    extern void nnedi3_word2float48_SSE2(const uint8_t *t, const int pitch, float *pf);
-    extern void nnedi3_byte2word48_SSE2(const uint8_t *t, const int pitch, float *pf);
-    extern void nnedi3_byte2word64_SSE2(const uint8_t *t, const int pitch, float *p);
+    extern void nnedi3_byte2float48_SSE2(const uint8_t *t, const intptr_t pitch, float *p);
+    extern void nnedi3_word2float48_SSE2(const uint8_t *t, const intptr_t pitch, float *pf);
+    extern void nnedi3_byte2word48_SSE2(const uint8_t *t, const intptr_t pitch, float *pf);
+    extern void nnedi3_byte2word64_SSE2(const uint8_t *t, const intptr_t pitch, float *p);
 
-    extern int32_t nnedi3_processLine0_SSE2(const uint8_t *tempu, int width, uint8_t *dstp, const uint8_t *src3p, const int src_pitch);
+    extern int32_t nnedi3_processLine0_SSE2(const uint8_t *tempu, intptr_t width, uint8_t *dstp, const uint8_t *src3p, const intptr_t src_pitch);
 
-    extern void nnedi3_extract_m8_SSE2(const uint8_t *srcp, const int stride, const int xdia, const int ydia, float *mstd, float *input);
-    extern void nnedi3_extract_m8_i16_SSE2(const uint8_t *srcp, const int stride, const int xdia, const int ydia, float *mstd, float *inputf);
+    extern void nnedi3_extract_m8_SSE2(const uint8_t *srcp, const intptr_t stride, const intptr_t xdia, const intptr_t ydia, float *mstd, float *input);
+    extern void nnedi3_extract_m8_i16_SSE2(const uint8_t *srcp, const intptr_t stride, const intptr_t xdia, const intptr_t ydia, float *mstd, float *inputf);
 
     extern void nnedi3_computeNetwork0_SSE2(const float *input, const float *weights, uint8_t *d);
     extern void nnedi3_computeNetwork0_i16_SSE2(const float *inputf, const float *weightsf, uint8_t *d);
     extern void nnedi3_computeNetwork0new_SSE2(const float *datai, const float *weights, uint8_t *d);
 
-    extern void nnedi3_weightedAvgElliottMul5_m16_SSE2(const float *w, const int n, float *mstd);
+    extern void nnedi3_weightedAvgElliottMul5_m16_SSE2(const float *w, const intptr_t n, float *mstd);
 
-    extern void nnedi3_e0_m16_SSE2(float *s, const int n);
-    extern void nnedi3_e1_m16_SSE2(float *s, const int n);
-    extern void nnedi3_e2_m16_SSE2(float *s, const int n);
+    extern void nnedi3_e0_m16_SSE2(float *s, const intptr_t n);
+    extern void nnedi3_e1_m16_SSE2(float *s, const intptr_t n);
+    extern void nnedi3_e2_m16_SSE2(float *s, const intptr_t n);
 
-    extern void nnedi3_dotProd_SSE2(const float *data, const float *weights, float *vals, const int n, const int len, const float *istd);
-    extern void nnedi3_dotProd_i16_SSE2(const float *dataf, const float *weightsf, float *vals, const int n, const int len, const float *istd);
+    extern void nnedi3_dotProd_SSE2(const float *data, const float *weights, float *vals, const intptr_t n, const intptr_t len, const float *istd);
+    extern void nnedi3_dotProd_i16_SSE2(const float *dataf, const float *weightsf, float *vals, const intptr_t n, const intptr_t len, const float *istd);
 
     extern void nnedi3_computeNetwork0_FMA3(const float *input, const float *weights, uint8_t *d);
-    extern void nnedi3_e0_m16_FMA3(float *s, const int n);
-    extern void nnedi3_dotProd_FMA3(const float *data, const float *weights, float *vals, const int n, const int len, const float *istd);
+    extern void nnedi3_e0_m16_FMA3(float *s, const intptr_t n);
+    extern void nnedi3_dotProd_FMA3(const float *data, const float *weights, float *vals, const intptr_t n, const intptr_t len, const float *istd);
 
     extern void nnedi3_computeNetwork0_FMA4(const float *input, const float *weights, uint8_t *d);
-    extern void nnedi3_e0_m16_FMA4(float *s, const int n);
-    extern void nnedi3_dotProd_FMA4(const float *data, const float *weights, float *vals, const int n, const int len, const float *istd);
+    extern void nnedi3_e0_m16_FMA4(float *s, const intptr_t n);
+    extern void nnedi3_dotProd_FMA4(const float *data, const float *weights, float *vals, const intptr_t n, const intptr_t len, const float *istd);
 }
 #elif defined(NNEDI3_ARM)
 // Functions implemented in simd_neon.c
 extern "C" {
-    extern void byte2word48_neon(const uint8_t *t, const int pitch, float *pf);
-    extern void byte2word64_neon(const uint8_t *t, const int pitch, float *pf);
-    extern void byte2float48_neon(const uint8_t *t, const int pitch, float *p);
-    extern void word2float48_neon(const uint8_t *t8, const int pitch, float *p);
+    extern void byte2word48_neon(const uint8_t *t, const intptr_t pitch, float *pf);
+    extern void byte2word64_neon(const uint8_t *t, const intptr_t pitch, float *pf);
+    extern void byte2float48_neon(const uint8_t *t, const intptr_t pitch, float *p);
+    extern void word2float48_neon(const uint8_t *t8, const intptr_t pitch, float *p);
 
     extern void computeNetwork0_neon(const float *input, const float *weights, uint8_t *d);
     extern void computeNetwork0_i16_neon(const float *inputf, const float *weightsf, uint8_t *d);
     extern void computeNetwork0new_neon(const float *dataf, const float *weightsf, uint8_t *d);
 
-    extern void dotProd_neon(const float *data, const float *weights, float *vals, const int n, const int len, const float *istd);
-    extern void dotProd_i16_neon(const float *dataf, const float *weightsf, float *vals, const int n, const int len, const float *istd);
+    extern void dotProd_neon(const float *data, const float *weights, float *vals, const intptr_t n, const intptr_t len, const float *istd);
+    extern void dotProd_i16_neon(const float *dataf, const float *weightsf, float *vals, const intptr_t n, const intptr_t len, const float *istd);
 }
 #endif
 
@@ -145,15 +145,15 @@ struct nnedi3Data {
     void (*evalFunc_1)(const nnedi3Data *, FrameData *);
 
     // Functions used in evalFunc_0
-    void (*readPixels)(const uint8_t *, const int, float *);
+    void (*readPixels)(const uint8_t *, const intptr_t, float *);
     void (*computeNetwork0)(const float *, const float *, uint8_t *);
     int32_t (*processLine0)(const uint8_t *, int, uint8_t *, const uint8_t *, const int, const int, const int);
 
     // Functions used in evalFunc_1
-    void (*extract)(const uint8_t *, const int, const int, const int, float *, float *);
-    void (*dotProd)(const float *, const float *, float *, const int, const int, const float *);
-    void (*expfunc)(float *, const int);
-    void (*wae5)(const float *, const int, float *);
+    void (*extract)(const uint8_t *, const intptr_t, const intptr_t, const intptr_t, float *, float *);
+    void (*dotProd)(const float *, const float *, float *, const intptr_t, const intptr_t, const float *);
+    void (*expfunc)(float *, const intptr_t);
+    void (*wae5)(const float *, const intptr_t, float *);
 };
 
 
@@ -224,7 +224,7 @@ void elliott_C(float *data, const int n) {
 }
 
 
-void dotProd_C(const float *data, const float *weights, float *vals, const int n, const int len, const float *scale) {
+void dotProd_C(const float *data, const float *weights, float *vals, const intptr_t n, const intptr_t len, const float *scale) {
     for (int i = 0; i < n; ++i) {
         float sum = 0.0f;
         for (int j = 0; j < len; ++j)
@@ -235,7 +235,7 @@ void dotProd_C(const float *data, const float *weights, float *vals, const int n
 }
 
 
-void dotProdS_C(const float *dataf, const float *weightsf, float *vals, const int n, const int len, const float *scale) {
+void dotProdS_C(const float *dataf, const float *weightsf, float *vals, const intptr_t n, const intptr_t len, const float *scale) {
     const int16_t *data = (int16_t *)dataf;
     const int16_t *weights = (int16_t *)weightsf;
     const float *wf = (float *)&weights[n * len];
@@ -284,7 +284,7 @@ void computeNetwork0_i16_C(const float *inputf, const float *weightsf, uint8_t *
 
 
 template <typename PixelType>
-void pixel2float48_C(const uint8_t *t8, const int pitch, float *p) {
+void pixel2float48_C(const uint8_t *t8, const intptr_t pitch, float *p) {
     const PixelType *t = (const PixelType *)t8;
 
     for (int y = 0; y < 4; ++y)
@@ -293,7 +293,7 @@ void pixel2float48_C(const uint8_t *t8, const int pitch, float *p) {
 }
 
 
-void byte2word48_C(const uint8_t *t, const int pitch, float *pf) {
+void byte2word48_C(const uint8_t *t, const intptr_t pitch, float *pf) {
     int16_t *p = (int16_t *)pf;
     for (int y = 0; y < 4; ++y)
         for (int x = 0; x < 12; ++x)
@@ -354,7 +354,7 @@ int32_t processLine0_C(const uint8_t *tempu, int width, uint8_t *dstp8, const ui
 }
 
 // new prescreener functions
-void byte2word64_C(const uint8_t *t, const int pitch, float *p) {
+void byte2word64_C(const uint8_t *t, const intptr_t pitch, float *p) {
     int16_t *ps = (int16_t *)p;
     for (int y = 0; y < 4; ++y)
         for (int x = 0; x < 16; ++x)
@@ -453,7 +453,7 @@ void evalFunc_0(const nnedi3Data *d, FrameData *frameData) {
 
 
 template <typename PixelType, typename AccumType, typename FloatType>
-void extract_m8_C(const uint8_t *srcp8, const int stride, const int xdia, const int ydia, float *mstd, float *input) {
+void extract_m8_C(const uint8_t *srcp8, const intptr_t stride, const intptr_t xdia, const intptr_t ydia, float *mstd, float *input) {
     // uint8_t or uint16_t or float
     const PixelType *srcp = (const PixelType *)srcp8;
 
@@ -485,7 +485,7 @@ void extract_m8_C(const uint8_t *srcp8, const int stride, const int xdia, const 
 }
 
 
-void extract_m8_i16_C(const uint8_t *srcp, const int stride, const int xdia, const int ydia, float *mstd, float *inputf) {
+void extract_m8_i16_C(const uint8_t *srcp, const intptr_t stride, const intptr_t xdia, const intptr_t ydia, float *mstd, float *inputf) {
     int16_t *input = (int16_t *)inputf;
     int sum = 0, sumsq = 0;
     for (int y = 0; y < ydia; ++y) {
@@ -522,7 +522,7 @@ const float e0_mult = 12102203.161561486f; // (1.0/ln(2))*(2^23)
 const float e0_bias = 1064866805.0f; // (2^23)*127.0-486411.0
 
 
-void e0_m16_C(float *s, const int n) {
+void e0_m16_C(float *s, const intptr_t n) {
     for (int i = 0; i < n; ++i) {
         const int t = (int)(std::max(std::min(s[i], exp_hi), exp_lo) * e0_mult + e0_bias);
         memcpy(&s[i], &t, sizeof(float));
@@ -540,7 +540,7 @@ const float e1_c1 = 0.701277797f;
 const float e1_c2 = 0.237348593f;
 
 
-void e1_m16_C(float *s, const int n) {
+void e1_m16_C(float *s, const intptr_t n) {
     for (int q = 0; q < n; ++q) {
         float x = std::max(std::min(s[q], exp_hi), exp_lo) * e1_scale;
         int i = (int)(x + 128.5f) - 128;
@@ -554,7 +554,7 @@ void e1_m16_C(float *s, const int n) {
 }
 
 
-void e2_m16_C(float *s, const int n) {
+void e2_m16_C(float *s, const intptr_t n) {
     for (int i = 0; i < n; ++i)
         s[i] = std::exp(std::max(std::min(s[i], exp_hi), exp_lo));
 }
@@ -565,7 +565,7 @@ void e2_m16_C(float *s, const int n) {
 const float min_weight_sum = 1e-10f;
 
 
-void weightedAvgElliottMul5_m16_C(const float *w, const int n, float *mstd) {
+void weightedAvgElliottMul5_m16_C(const float *w, const intptr_t n, float *mstd) {
     float vsum = 0.0f, wsum = 0.0f;
     for (int i = 0; i < n; ++i) {
         vsum += w[i] * (w[n + i] / (1.0f + std::fabs(w[n + i])));
