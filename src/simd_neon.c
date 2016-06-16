@@ -394,6 +394,8 @@ void computeNetwork0new_neon(const float *dataf, const float *weightsf, uint8_t 
 
 
 void dotProd_neon(const float *data, const float *weights, float *vals, const int n, const int len, const float *istd) {
+    const float *orig_weights = weights;
+
     for (int i = 0; i < n; i += 4) {
         float32x4_t accum0 = { 0.0f, 0.0f, 0.0f, 0.0f };
         float32x4_t accum1 = accum0;
@@ -428,7 +430,7 @@ void dotProd_neon(const float *data, const float *weights, float *vals, const in
         float32x4_t sum = vcombine_f32(sum0, sum1);
         
         sum = vmulq_n_f32(sum, istd[0]);
-        sum = vaddq_f32(sum, vld1q_f32(weights + n*len + i));
+        sum = vaddq_f32(sum, vld1q_f32(orig_weights + n*len + i));
         vst1q_f32(vals + i, sum);
     }
 }
