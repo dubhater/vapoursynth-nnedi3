@@ -1,5 +1,5 @@
 warning_flags = -Wall -Wextra -Wno-unused-parameter -Wshadow
-common_cflags = -O2 $(MFLAGS) $(warning_flags)
+common_cflags = -O2 $(MFLAGS) $(STACKREALIGN) $(warning_flags)
 AM_CFLAGS = -std=c99 $(common_cflags)
 AM_CXXFLAGS = -std=c++11 $(common_cflags)
 
@@ -8,6 +8,7 @@ AM_CPPFLAGS = $(VapourSynth_CFLAGS) -DNNEDI3_DATADIR='"$(pkgdatadir)"'
 dist_pkgdata_DATA = src/nnedi3_weights.bin
 
 lib_LTLIBRARIES = libnnedi3.la
+noinst_LTLIBRARIES =
 
 yasm_verbose = $(yasm_verbose_$(V))
 yasm_verbose_ = $(yasm_verbose_$(AM_DEFAULT_VERBOSITY))
@@ -22,11 +23,24 @@ libnnedi3_la_SOURCES = src/nnedi3.cpp \
 
 if NNEDI3_X86
 libnnedi3_la_SOURCES += src/asm/cpu-a.asm \
-						src/asm/nnedi3.asm
+						src/simd_x86.h
+
+noinst_LTLIBRARIES += libsse2.la libfma3.la libfma4.la
+
+libsse2_la_SOURCES = src/simd_sse2.c
+libsse2_la_CFLAGS = $(AM_CFLAGS) -msse2 -funroll-loops
+
+libfma3_la_SOURCES = src/simd_fma3.c
+libfma3_la_CFLAGS = $(AM_CFLAGS) -mfma -funroll-loops -ffp-contract=fast
+
+libfma4_la_SOURCES = src/simd_fma4.c
+libfma4_la_CFLAGS = $(AM_CFLAGS) -mfma4 -funroll-loops -ffp-contract=fast
+
+libnnedi3_la_LIBADD = libsse2.la libfma3.la libfma4.la
 endif
 
 if NNEDI3_ARM
-noinst_LTLIBRARIES = libneon.la
+noinst_LTLIBRARIES += libneon.la
 
 libneon_la_SOURCES = src/simd_neon.c
 

@@ -43,7 +43,7 @@
 
 
 #if defined(NNEDI3_X86)
-// Functions implemented in nnedi3.asm
+// Functions implemented in simd_x86.h, simd_sse2.c, simd_fma3.c, simd_fma4.c.
 extern "C" {
     extern void nnedi3_byte2float48_SSE2(const uint8_t *t, const intptr_t pitch, float *p);
     extern void nnedi3_word2float48_SSE2(const uint8_t *t, const intptr_t pitch, float *pf);
