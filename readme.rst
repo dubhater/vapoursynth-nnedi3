@@ -32,11 +32,13 @@ When the input clip has more than 8 bits per sample, some parameters' allowed an
 
 The opt parameter is now a boolean. If False, only C functions will be used. If True, the best functions that can run on your CPU will be selected automatically.
 
-The ``_FieldBased`` frame property is now used to determine each frame's field dominance. The *field* parameter is only a fallback for frames that don't have the ``_FieldBased`` property, or where said property indicates that the frame is progressive.
+If *dh* is True, the ``_Field`` frame property is used to determine each frame's field dominance. The *field* parameter is only a fallback for frames that don't have the ``_Field`` property.
 
-The Y, U, and V parameters are deprecated. Use the planes parameter instead.
+If *dh* is False, the ``_FieldBased`` frame property is used to determine each frame's field dominance. The *field* parameter is only a fallback for frames that don't have the ``_FieldBased`` property, or where said property indicates that the frame is progressive.
 
-This plugin no longer provides the nnedi3_rpow2 filter.
+The *Y*, *U*, and *V* parameters are deprecated. Use the *planes* parameter instead.
+
+This plugin no longer provides the nnedi3_rpow2 filter. A replacement can be found here: http://forum.doom9.org/showthread.php?t=172652
 
 
 Compilation

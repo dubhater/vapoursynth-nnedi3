@@ -1194,6 +1194,12 @@ typedef enum VSFieldBased {
 } VSFieldBased;
 
 
+typedef enum VSField {
+    VSFieldBottom = 0,
+    VSFieldTop
+} VSField;
+
+
 static const VSFrameRef *VS_CC nnedi3GetFrame(int n, int activationReason, void **instanceData, void **fData, VSFrameContext *frameCtx, VSCore *core, const VSAPI *vsapi) {
     const nnedi3Data *d = (const nnedi3Data *) * instanceData;
 
@@ -1204,15 +1210,27 @@ static const VSFrameRef *VS_CC nnedi3GetFrame(int n, int activationReason, void 
 
         int err;
         const VSMap *src_props = vsapi->getFramePropsRO(src);
-        int fieldbased = int64ToIntS(vsapi->propGetInt(src_props, "_FieldBased", 0, &err));
+
         int effective_field = d->field;
         if (effective_field > 1)
             effective_field -= 2;
 
-        if (fieldbased == VSFieldBasedBFF)
-            effective_field = 0;
-        else if (fieldbased == VSFieldBasedTFF)
-            effective_field = 1;
+        if (d->dh) {
+            int field = int64ToIntS(vsapi->propGetInt(src_props, "_Field", 0, &err));
+            if (!err) {
+                if (field == VSFieldBottom)
+                    effective_field = 0;
+                else if (field == VSFieldTop)
+                    effective_field = 1;
+            }
+        } else {
+            int fieldbased = int64ToIntS(vsapi->propGetInt(src_props, "_FieldBased", 0, &err));
+
+            if (fieldbased == VSFieldBasedBFF)
+                effective_field = 0;
+            else if (fieldbased == VSFieldBasedTFF)
+                effective_field = 1;
+        }
 
         int field_n;
         if (d->field > 1) {
