@@ -1389,34 +1389,6 @@ static void VS_CC nnedi3Create(const VSMap *in, VSMap *out, void *userData, VSCo
         d.process[o] = 1;
     }
 
-    int Y = int64ToIntS(vsapi->propGetInt(in, "Y", 0, &err));
-    if (!err) {
-        if (m > -1) {
-            vsapi->setError(out, "nnedi3: can't use 'Y' and 'planes' at the same time");
-            vsapi->freeNode(d.node);
-            return;
-        }
-        d.process[0] = Y;
-    }
-    int U = int64ToIntS(vsapi->propGetInt(in, "U", 0, &err));
-    if (!err) {
-        if (m > -1) {
-            vsapi->setError(out, "nnedi3: can't use 'U' and 'planes' at the same time");
-            vsapi->freeNode(d.node);
-            return;
-        }
-        d.process[1] = U;
-    }
-    int V = int64ToIntS(vsapi->propGetInt(in, "V", 0, &err));
-    if (!err) {
-        if (m > -1) {
-            vsapi->setError(out, "nnedi3: can't use 'V' and 'planes' at the same time");
-            vsapi->freeNode(d.node);
-            return;
-        }
-        d.process[2] = V;
-    }
-
     d.nsize = int64ToIntS(vsapi->propGetInt(in, "nsize", 0, &err));
     if (err)
         d.nsize = 6;
@@ -1550,9 +1522,6 @@ VS_EXTERNAL_API(void) VapourSynthPluginInit(VSConfigPlugin configFunc, VSRegiste
             "field:int;"
             "dh:int:opt;"
             "planes:int[]:opt;"
-            "Y:int:opt;"
-            "U:int:opt;"
-            "V:int:opt;"
             "nsize:int:opt;"
             "nns:int:opt;"
             "qual:int:opt;"

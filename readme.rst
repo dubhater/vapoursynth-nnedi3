@@ -13,7 +13,7 @@ The file ``nnedi3_weights.bin`` is required. In Windows, it must be located in t
 
 ::
 
-   nnedi3.nnedi3(clip clip, int field[, bint dh=False, int[] planes=[0, 1, 2], bint Y=True, bint U=True, bint V=True, int nsize=6, int nns=1, int qual=1, int etype=0, int pscrn=2, bint opt=True, bint int16_prescreener=True, bint int16_predictor=True, int exp=0])
+   nnedi3.nnedi3(clip clip, int field[, bint dh=False, int[] planes=[0, 1, 2], int nsize=6, int nns=1, int qual=1, int etype=0, int pscrn=2, bint opt=True, bint int16_prescreener=True, bint int16_predictor=True, int exp=0])
 
 Allowed values (ranges are inclusive):
 
@@ -32,8 +32,6 @@ The opt parameter is now a boolean. If False, only C functions will be used. If 
 If *dh* is True, the ``_Field`` frame property is used to determine each frame's field dominance. The *field* parameter is only a fallback for frames that don't have the ``_Field`` property.
 
 If *dh* is False, the ``_FieldBased`` frame property is used to determine each frame's field dominance. The *field* parameter is only a fallback for frames that don't have the ``_FieldBased`` property, or where said property indicates that the frame is progressive.
-
-The *Y*, *U*, and *V* parameters are deprecated. Use the *planes* parameter instead.
 
 This plugin no longer provides the nnedi3_rpow2 filter. A replacement can be found here: http://forum.doom9.org/showthread.php?t=172652
 
