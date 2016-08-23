@@ -1187,6 +1187,13 @@ static int modnpf(const int m, const int n) {
 }
 
 
+typedef enum VSFieldBased {
+    VSFieldBasedProgressive = 0,
+    VSFieldBasedBFF,
+    VSFieldBasedTFF
+} VSFieldBased;
+
+
 static const VSFrameRef *VS_CC nnedi3GetFrame(int n, int activationReason, void **instanceData, void **fData, VSFrameContext *frameCtx, VSCore *core, const VSAPI *vsapi) {
     const nnedi3Data *d = (const nnedi3Data *) * instanceData;
 
@@ -1202,9 +1209,9 @@ static const VSFrameRef *VS_CC nnedi3GetFrame(int n, int activationReason, void 
         if (effective_field > 1)
             effective_field -= 2;
 
-        if (fieldbased == 1)
+        if (fieldbased == VSFieldBasedBFF)
             effective_field = 0;
-        else if (fieldbased == 2)
+        else if (fieldbased == VSFieldBasedTFF)
             effective_field = 1;
 
         int field_n;
@@ -1280,8 +1287,9 @@ static const VSFrameRef *VS_CC nnedi3GetFrame(int n, int activationReason, void 
 
         vsapi->freeFrame(src);
 
+        VSMap *dst_props = vsapi->getFramePropsRW(dst);
+
         if (d->field > 1) {
-            VSMap *dst_props = vsapi->getFramePropsRW(dst);
             int err_num, err_den;
             int64_t duration_num = vsapi->propGetInt(dst_props, "_DurationNum", 0, &err_num);
             int64_t duration_den = vsapi->propGetInt(dst_props, "_DurationDen", 0, &err_den);
@@ -1291,6 +1299,8 @@ static const VSFrameRef *VS_CC nnedi3GetFrame(int n, int activationReason, void 
                 vsapi->propSetInt(dst_props, "_DurationDen", duration_den, paReplace);
             }
         }
+
+        vsapi->propSetInt(dst_props, "_FieldBased", VSFieldBasedProgressive, paReplace);
 
         return dst;
     }
