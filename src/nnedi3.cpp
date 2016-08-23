@@ -136,7 +136,9 @@ struct nnedi3Data {
     int etype;
     int pscrn;
     int opt;
-    int fapprox;
+    int int16_prescreener;
+    int int16_predictor;
+    int exp;
 
     int max_value;
 
@@ -687,7 +689,7 @@ static void selectFunctions(nnedi3Data *d) {
         d->processLine0 = processLine0_C<uint8_t, int>;
 
         if (d->pscrn < 2) { // original prescreener
-            if (d->fapprox & 1) { // int16 dot products
+            if (d->int16_prescreener) { // int16 dot products
                 d->readPixels = byte2word48_C;
                 d->computeNetwork0 = computeNetwork0_i16_C;
             } else {
@@ -703,7 +705,7 @@ static void selectFunctions(nnedi3Data *d) {
         // evalFunc_1
         d->wae5 = weightedAvgElliottMul5_m16_C;
 
-        if (d->fapprox & 2) { // use int16 dot products
+        if (d->int16_predictor) { // use int16 dot products
             d->extract = extract_m8_i16_C;
             d->dotProd = dotProdS_C;
         } else { // use float dot products
@@ -711,9 +713,9 @@ static void selectFunctions(nnedi3Data *d) {
             d->dotProd = dotProd_C;
         }
 
-        if ((d->fapprox & 12) == 0) // use slow exp
+        if (d->exp == 2) // use slow exp
             d->expfunc = e2_m16_C;
-        else if ((d->fapprox & 12) == 4) // use faster exp
+        else if (d->exp == 1) // use faster exp
             d->expfunc = e1_m16_C;
         else // use fastest exp
             d->expfunc = e0_m16_C;
@@ -724,7 +726,7 @@ static void selectFunctions(nnedi3Data *d) {
             d->processLine0 = processLine0_maybeSSE2;
 
             if (d->pscrn < 2) { // original prescreener
-                if (d->fapprox & 1) { // int16 dot products
+                if (d->int16_prescreener) { // int16 dot products
                     d->readPixels = nnedi3_byte2word48_SSE2;
                     d->computeNetwork0 = nnedi3_computeNetwork0_i16_SSE2;
                 } else {
@@ -744,7 +746,7 @@ static void selectFunctions(nnedi3Data *d) {
             // evalFunc_1
             d->wae5 = nnedi3_weightedAvgElliottMul5_m16_SSE2;
 
-            if (d->fapprox & 2) { // use int16 dot products
+            if (d->int16_predictor) { // use int16 dot products
                 d->extract = nnedi3_extract_m8_i16_SSE2;
                 d->dotProd = nnedi3_dotProd_i16_SSE2;
             } else { // use float dot products
@@ -756,9 +758,9 @@ static void selectFunctions(nnedi3Data *d) {
                     d->dotProd = nnedi3_dotProd_FMA4;
             }
 
-            if ((d->fapprox & 12) == 0) { // use slow exp
+            if (d->exp == 2) { // use slow exp
                 d->expfunc = nnedi3_e2_m16_SSE2;
-            } else if ((d->fapprox & 12) == 4) { // use faster exp
+            } else if (d->exp == 1) { // use faster exp
                 d->expfunc = nnedi3_e1_m16_SSE2;
             } else { // use fastest exp
                 d->expfunc = nnedi3_e0_m16_SSE2;
@@ -771,7 +773,7 @@ static void selectFunctions(nnedi3Data *d) {
 #elif defined(NNEDI3_ARM)
         if (d->opt && cpu.neon) {
             if (d->pscrn < 2) { // original prescreener
-                if (d->fapprox & 1) { // int16 dot products
+                if (d->int16_prescreener) { // int16 dot products
                     d->readPixels = byte2word48_neon;
                     d->computeNetwork0 = computeNetwork0_i16_neon;
                 } else {
@@ -785,7 +787,7 @@ static void selectFunctions(nnedi3Data *d) {
             }
 
             // evalFunc_1
-            if (d->fapprox & 2) // use int16 dot products
+            if (d->int16_predictor) // use int16 dot products
                 d->dotProd = dotProd_i16_neon;
             else // use float dot products
                 d->dotProd = dotProd_neon;
@@ -808,9 +810,9 @@ static void selectFunctions(nnedi3Data *d) {
         d->extract = extract_m8_C<uint16_t, int64_t, double>;
         d->dotProd = dotProd_C;
 
-        if ((d->fapprox & 12) == 0) // use slow exp
+        if (d->exp == 2) // use slow exp
             d->expfunc = e2_m16_C;
-        else if ((d->fapprox & 12) == 4) // use faster exp
+        else if (d->exp == 1) // use faster exp
             d->expfunc = e1_m16_C;
         else // use fastest exp
             d->expfunc = e0_m16_C;
@@ -834,9 +836,9 @@ static void selectFunctions(nnedi3Data *d) {
             if (cpu.fma4)
                 d->dotProd = nnedi3_dotProd_FMA4;
 
-            if ((d->fapprox & 12) == 0) { // use slow exp
+            if (d->exp == 2) { // use slow exp
                 d->expfunc = nnedi3_e2_m16_SSE2;
-            } else if ((d->fapprox & 12) == 4) { // use faster exp
+            } else if (d->exp == 1) { // use faster exp
                 d->expfunc = nnedi3_e1_m16_SSE2;
             } else { // use fastest exp
                 d->expfunc = nnedi3_e0_m16_SSE2;
@@ -870,9 +872,9 @@ static void selectFunctions(nnedi3Data *d) {
         d->extract = extract_m8_C<float, double, double>;
         d->dotProd = dotProd_C;
 
-        if ((d->fapprox & 12) == 0) // use slow exp
+        if (d->exp == 2) // use slow exp
             d->expfunc = e2_m16_C;
-        else if ((d->fapprox & 12) == 4) // use faster exp
+        else if (d->exp == 1) // use faster exp
             d->expfunc = e1_m16_C;
         else // use fastest exp
             d->expfunc = e0_m16_C;
@@ -895,9 +897,9 @@ static void selectFunctions(nnedi3Data *d) {
             if (cpu.fma4)
                 d->dotProd = nnedi3_dotProd_FMA4;
 
-            if ((d->fapprox & 12) == 0) { // use slow exp
+            if (d->exp == 2) { // use slow exp
                 d->expfunc = nnedi3_e2_m16_SSE2;
-            } else if ((d->fapprox & 12) == 4) { // use faster exp
+            } else if (d->exp == 1) { // use faster exp
                 d->expfunc = nnedi3_e1_m16_SSE2;
             } else { // use fastest exp
                 d->expfunc = nnedi3_e0_m16_SSE2;
@@ -1048,7 +1050,7 @@ static void VS_CC nnedi3Init(VSMap *in, VSMap *out, void **instanceData, VSNode 
                 cmean += bdata[j * 48 + k];
             mean[j] = cmean / 48.0;
         }
-        if (d->fapprox & 1) {// use int16 dot products in first layer
+        if (d->int16_prescreener) {// use int16 dot products in first layer
             int16_t *ws = (int16_t *)d->weights0;
             float *wf = (float *)&ws[4 * 48];
             // Factor mean removal and 1.0/127.5 scaling 
@@ -1120,7 +1122,7 @@ static void VS_CC nnedi3Init(VSMap *in, VSMap *out, void **instanceData, VSNode 
         for (int j = 0; j < asize + 1; ++j)
             mean[j] /= (double)(nnst);
 
-        if (d->fapprox & 2) {// use int16 dot products
+        if (d->int16_predictor) {// use int16 dot products
             int16_t *ws = (int16_t *)d->weights1[i];
             float *wf = (float *)&ws[nnst * 2 * asize];
             // Factor mean removal into weights, remove global offset from
@@ -1445,13 +1447,15 @@ static void VS_CC nnedi3Create(const VSMap *in, VSMap *out, void *userData, VSCo
     d.opt = 0;
 #endif
 
-    d.fapprox = int64ToIntS(vsapi->propGetInt(in, "fapprox", 0, &err));
-    if (err) {
-        if (d.vi.format->bitsPerSample == 8)
-            d.fapprox = 15;
-        else
-            d.fapprox = 12;
-    }
+    d.int16_prescreener = !!vsapi->propGetInt(in, "int16_prescreener", 0, &err);
+    if (err)
+        d.int16_prescreener = 1;
+
+    d.int16_predictor = !!vsapi->propGetInt(in, "int16_predictor", 0, &err);
+    if (err)
+        d.int16_predictor = 1;
+
+    d.exp = int64ToIntS(vsapi->propGetInt(in, "exp", 0, &err));
 
     // Check the values.
     if (d.field < 0 || d.field > 3) {
@@ -1506,18 +1510,10 @@ static void VS_CC nnedi3Create(const VSMap *in, VSMap *out, void *userData, VSCo
         }
     }
 
-    if (d.vi.format->bitsPerSample == 8) {
-        if (d.fapprox < 0 || d.fapprox > 15) {
-            vsapi->setError(out, "nnedi3: fapprox must be between 0 and 15 (inclusive)");
-            vsapi->freeNode(d.node);
-            return;
-        }
-    } else {
-        if (d.fapprox != 0 && d.fapprox != 4 && d.fapprox != 8 && d.fapprox != 12) {
-            vsapi->setError(out, "nnedi3: fapprox must be 4, 8, or 12");
-            vsapi->freeNode(d.node);
-            return;
-        }
+    if (d.exp < 0 || d.exp > 2) {
+        vsapi->setError(out, "nnedi3: exp must be between 0 and 2 (inclusive)");
+        vsapi->freeNode(d.node);
+        return;
     }
 
     // Changing the video info probably has to be done before createFilter.
@@ -1563,7 +1559,9 @@ VS_EXTERNAL_API(void) VapourSynthPluginInit(VSConfigPlugin configFunc, VSRegiste
             "etype:int:opt;"
             "pscrn:int:opt;"
             "opt:int:opt;"
-            "fapprox:int:opt;"
+            "int16_prescreener:int:opt;"
+            "int16_predictor:int:opt;"
+            "exp:int:opt;"
             , nnedi3Create, 0, plugin);
 }
 
