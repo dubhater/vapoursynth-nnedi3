@@ -139,6 +139,7 @@ struct nnedi3Data {
     int int16_prescreener;
     int int16_predictor;
     int exp;
+    int show_mask;
 
     int max_value;
 
@@ -1289,7 +1290,8 @@ static const VSFrameRef *VS_CC nnedi3GetFrame(int n, int activationReason, void 
         d->evalFunc_0(d, frameData);
 
         // The rest.
-        d->evalFunc_1(d, frameData);
+        if (!d->show_mask)
+            d->evalFunc_1(d, frameData);
 
 
         // Clean up.
@@ -1429,6 +1431,8 @@ static void VS_CC nnedi3Create(const VSMap *in, VSMap *out, void *userData, VSCo
 
     d.exp = int64ToIntS(vsapi->propGetInt(in, "exp", 0, &err));
 
+    d.show_mask = !!vsapi->propGetInt(in, "show_mask", 0, &err);
+
     // Check the values.
     if (d.field < 0 || d.field > 3) {
         vsapi->setError(out, "nnedi3: field must be between 0 and 3 (inclusive)");
@@ -1531,6 +1535,7 @@ VS_EXTERNAL_API(void) VapourSynthPluginInit(VSConfigPlugin configFunc, VSRegiste
             "int16_prescreener:int:opt;"
             "int16_predictor:int:opt;"
             "exp:int:opt;"
+            "show_mask:int:opt;"
             , nnedi3Create, 0, plugin);
 }
 
