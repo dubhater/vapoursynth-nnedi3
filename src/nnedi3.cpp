@@ -1509,6 +1509,11 @@ static void VS_CC nnedi3Create(const VSMap *in, VSMap *out, void *userData, VSCo
 
     d.max_value = 65535 >> (16 - d.vi.format->bitsPerSample);
 
+    if (d.vi.format->bitsPerSample > 8) {
+        d.int16_prescreener = 0;
+        d.int16_predictor = 0;
+    }
+
     selectFunctions(&d);
 
     data = (nnedi3Data *)malloc(sizeof(d));
