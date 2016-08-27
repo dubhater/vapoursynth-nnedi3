@@ -150,7 +150,7 @@ struct nnedi3Data {
     // Functions used in evalFunc_0
     void (*readPixels)(const uint8_t *, const intptr_t, float *);
     void (*computeNetwork0)(const float *, const float *, uint8_t *);
-    int32_t (*processLine0)(const uint8_t *, int, uint8_t *, const uint8_t *, const int, const int, const int);
+    int32_t (*processLine0)(const uint8_t *, int, uint8_t *, const uint8_t *, const int, const int);
 
     // Functions used in evalFunc_1
     void (*extract)(const uint8_t *, const intptr_t, const intptr_t, const intptr_t, float *, float *);
@@ -306,7 +306,7 @@ static void byte2word48_C(const uint8_t *t, const intptr_t pitch, float *pf) {
 
 #ifdef NNEDI3_X86
 #define CB2(n) std::max(std::min((n), 254), 0)
-static int32_t processLine0_maybeSSE2(const uint8_t *tempu, int width, uint8_t *dstp, const uint8_t *src3p, const int src_pitch, const int max_value, const int) {
+static int32_t processLine0_maybeSSE2(const uint8_t *tempu, int width, uint8_t *dstp, const uint8_t *src3p, const int src_pitch, const int max_value) {
     int32_t count = 0;
     const int remain = width & 15;
     width -= remain;
@@ -330,7 +330,7 @@ static int32_t processLine0_maybeSSE2(const uint8_t *tempu, int width, uint8_t *
 // PixelType can be uint8_t, uint16_t, or float.
 // TempType can be int or float.
 template <typename PixelType, typename TempType>
-static int32_t processLine0_C(const uint8_t *tempu, int width, uint8_t *dstp8, const uint8_t *src3p8, const int src_pitch, const int max_value, const int chroma) {
+static int32_t processLine0_C(const uint8_t *tempu, int width, uint8_t *dstp8, const uint8_t *src3p8, const int src_pitch, const int max_value) {
     PixelType *dstp = (PixelType *)dstp8;
     const PixelType *src3p = (const PixelType *)src3p8;
 
@@ -430,7 +430,7 @@ static void evalFunc_0(const nnedi3Data *d, FrameData *frameData) {
                     d->readPixels((const uint8_t *)(src3p + x - 5), src_stride, input);
                     d->computeNetwork0(input, weights0, tempu+x);
                 }
-                lcount[y] += d->processLine0(tempu + 32, width - 64, (uint8_t *)(dstp + 32), (const uint8_t *)(src3p + 32), src_stride, d->max_value, plane && d->vi.format->colorFamily != cmRGB);
+                lcount[y] += d->processLine0(tempu + 32, width - 64, (uint8_t *)(dstp + 32), (const uint8_t *)(src3p + 32), src_stride, d->max_value);
                 src3p += src_stride * 2;
                 dstp += dst_stride * 2;
             }
@@ -440,7 +440,7 @@ static void evalFunc_0(const nnedi3Data *d, FrameData *frameData) {
                     d->readPixels((const uint8_t *)(src3p + x - 6), src_stride, input);
                     d->computeNetwork0(input, weights0, tempu + x);
                 }
-                lcount[y] += d->processLine0(tempu + 32, width - 64, (uint8_t *)(dstp + 32), (const uint8_t *)(src3p + 32), src_stride, d->max_value, plane && d->vi.format->colorFamily != cmRGB);
+                lcount[y] += d->processLine0(tempu + 32, width - 64, (uint8_t *)(dstp + 32), (const uint8_t *)(src3p + 32), src_stride, d->max_value);
                 src3p += src_stride * 2;
                 dstp += dst_stride * 2;
             }
