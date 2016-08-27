@@ -25,7 +25,8 @@ Allowed values (ranges are inclusive):
 - pscrn: 0..4
 - exp: 0..2
 
-When the input clip has more than 8 bits per sample, the *pscrn* parameter can only be 0 or 1, and the parameters *int16_prescreener* and *int16_predictor* are ignored.
+When the input clip has float samples, the *pscrn* parameter can only be 0 or 1, and the *int16_prescreener* parameter is ignored.
+When the input clip has more than 8 bits per sample, the *int16_predictor* parameter is ignored.
 
 The opt parameter is now a boolean. If False, only C functions will be used. If True, the best functions that can run on your CPU will be selected automatically.
 

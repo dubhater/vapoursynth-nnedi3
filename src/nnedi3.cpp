@@ -365,6 +365,25 @@ static void byte2word64_C(const uint8_t *t, const intptr_t pitch, float *p) {
 }
 
 
+template <int size, bool shift>
+static void word2word_C(const uint8_t *t, const intptr_t pitch, float *p) {
+    int16_t *ps = (int16_t *)p;
+    const uint16_t *ts = (const uint16_t *)t;
+
+    const int height = 4;
+    const int width = size / height;
+
+    for (int y = 0; y < height; ++y) {
+        if (shift) {
+            for (int x = 0; x < width; ++x)
+                ps[y * width + x] = ts[y * pitch * 2 + x] >> (int)shift;
+        } else {
+            memcpy(&ps[y * width], &ts[y * pitch * 2], width * sizeof(uint16_t));
+        }
+    }
+}
+
+
 static void computeNetwork0new_C(const float *datai, const float *weights, uint8_t *d) {
     int16_t *data = (int16_t *)datai;
     int16_t *ws = (int16_t *)weights;
@@ -434,7 +453,7 @@ static void evalFunc_0(const nnedi3Data *d, FrameData *frameData) {
                 src3p += src_stride * 2;
                 dstp += dst_stride * 2;
             }
-        } else if (sizeof(PixelType) == 1 && d->pscrn >= 2) {// new
+        } else if (d->pscrn >= 2) {// new
             for (int y = ystart; y < ystop; y += 2) {
                 for (int x = 32; x < width - 32; x += 4) {
                     d->readPixels((const uint8_t *)(src3p + x - 6), src_stride, input);
@@ -802,8 +821,18 @@ static void selectFunctions(nnedi3Data *d) {
         // evalFunc_0
         d->processLine0 = processLine0_C<uint16_t, int>;
 
-        d->readPixels = pixel2float48_C<uint16_t>;
-        d->computeNetwork0 = computeNetwork0_C;
+        if (d->pscrn < 2) {
+            if (d->int16_prescreener) {
+                d->readPixels = d->vi.format->bitsPerSample == 16 ? word2word_C<48, true> : word2word_C<48, false>;
+                d->computeNetwork0 = computeNetwork0_i16_C;
+            } else {
+                d->readPixels = pixel2float48_C<uint16_t>;
+                d->computeNetwork0 = computeNetwork0_C;
+            }
+        } else {
+            d->readPixels = d->vi.format->bitsPerSample == 16 ? word2word_C<64, true> : word2word_C<64, false>;
+            d->computeNetwork0 = computeNetwork0new_C;
+        }
 
         // evalFunc_1
         d->wae5 = weightedAvgElliottMul5_m16_C;
@@ -821,12 +850,20 @@ static void selectFunctions(nnedi3Data *d) {
 #if defined(NNEDI3_X86)
         if (d->opt) {
             // evalFunc_0
-            d->readPixels = nnedi3_word2float48_SSE2;
-            d->computeNetwork0 = nnedi3_computeNetwork0_SSE2;
-            if (cpu.fma3)
-                d->computeNetwork0 = nnedi3_computeNetwork0_FMA3;
-            if (cpu.fma4)
-                d->computeNetwork0 = nnedi3_computeNetwork0_FMA4;
+            if (d->pscrn < 2) {
+                if (d->int16_prescreener) {
+                    d->computeNetwork0 = nnedi3_computeNetwork0_i16_SSE2;
+                } else {
+                    d->readPixels = nnedi3_word2float48_SSE2;
+                    d->computeNetwork0 = nnedi3_computeNetwork0_SSE2;
+                    if (cpu.fma3)
+                        d->computeNetwork0 = nnedi3_computeNetwork0_FMA3;
+                    if (cpu.fma4)
+                        d->computeNetwork0 = nnedi3_computeNetwork0_FMA4;
+                }
+            } else {
+                d->computeNetwork0 = nnedi3_computeNetwork0new_SSE2;
+            }
 
             // evalFunc_1
             d->wae5 = nnedi3_weightedAvgElliottMul5_m16_SSE2;
@@ -851,8 +888,16 @@ static void selectFunctions(nnedi3Data *d) {
         }
 #elif defined(NNEDI3_ARM)
         if (d->opt && cpu.neon) {
-            d->readPixels = word2float48_neon;
-            d->computeNetwork0 = computeNetwork0_neon;
+            if (d->pscrn < 2) {
+                if (d->int16_prescreener) {
+                    d->computeNetwork0 = computeNetwork0_i16_neon;
+                } else {
+                    d->readPixels = word2float48_neon;
+                    d->computeNetwork0 = computeNetwork0_neon;
+                }
+            } else {
+                d->computeNetwork0 = computeNetwork0new_neon;
+            }
             d->dotProd = dotProd_neon;
         }
 #endif
@@ -1029,15 +1074,20 @@ static void VS_CC nnedi3Init(VSMap *in, VSMap *out, void **instanceData, VSNode 
                 cmean += bdw[offt[j * 64 + k]];
             mean[j] = cmean / 64.0;
         }
-        // Factor mean removal and 1.0/127.5 scaling 
+
+        // 16 bit pixels will be shifted by 1 for the prescreener.
+        const int prescreener_bits = std::min(d->vi.format->bitsPerSample, 15);
+        const double half = ((1 << prescreener_bits) - 1) / 2.0;
+
+        // Factor mean removal and 1.0/half scaling
         // into first layer weights. scale to int16 range
         for (int j = 0; j < 4; ++j) {
             double mval = 0.0;
             for (int k = 0; k < 64; ++k)
-                mval = std::max(mval, std::fabs((bdw[offt[j * 64 + k]] - mean[j]) / 127.5));
+                mval = std::max(mval, std::fabs((bdw[offt[j * 64 + k]] - mean[j]) / half));
             const double scale = 32767.0 / mval;
             for (int k = 0; k < 64; ++k)
-                ws[offt[j * 64 + k]] = roundds(((bdw[offt[j * 64 + k]] - mean[j]) / 127.5) * scale);
+                ws[offt[j * 64 + k]] = roundds(((bdw[offt[j * 64 + k]] - mean[j]) / half) * scale);
             wf[j] = (float)(mval / 32767.0);
         }
         memcpy(wf + 4, bdw + 4 * 64, (dims0new - 4 * 64) * sizeof(float));
@@ -1054,15 +1104,20 @@ static void VS_CC nnedi3Init(VSMap *in, VSMap *out, void **instanceData, VSNode 
         if (d->int16_prescreener) {// use int16 dot products in first layer
             int16_t *ws = (int16_t *)d->weights0;
             float *wf = (float *)&ws[4 * 48];
-            // Factor mean removal and 1.0/127.5 scaling 
+
+            // 16 bit pixels will be shifted by 1 for the prescreener.
+            const int prescreener_bits = std::min(d->vi.format->bitsPerSample, 15);
+            const double half = ((1 << prescreener_bits) - 1) / 2.0;
+
+            // Factor mean removal and 1.0/half scaling
             // into first layer weights. scale to int16 range
             for (int j = 0; j < 4; ++j) {
                 double mval = 0.0;
                 for (int k = 0; k < 48; ++k)
-                    mval = std::max(mval, std::fabs((bdata[j * 48 + k] - mean[j]) / 127.5));
+                    mval = std::max(mval, std::fabs((bdata[j * 48 + k] - mean[j]) / half));
                 const double scale = 32767.0 / mval;
                 for (int k = 0; k < 48; ++k)
-                    ws[j * 48 + k] = roundds(((bdata[j * 48 + k] - mean[j]) / 127.5) * scale);
+                    ws[j * 48 + k] = roundds(((bdata[j * 48 + k] - mean[j]) / half) * scale);
                 wf[j] = (float)(mval / 32767.0);
             }
             memcpy(wf + 4, bdata + 4 * 48, (dims0 - 4 * 48) * sizeof(float));
@@ -1407,7 +1462,7 @@ static void VS_CC nnedi3Create(const VSMap *in, VSMap *out, void *userData, VSCo
 
     d.pscrn = int64ToIntS(vsapi->propGetInt(in, "pscrn", 0, &err));
     if (err) {
-        if (d.vi.format->bitsPerSample == 8)
+        if (d.vi.format->sampleType == stInteger)
             d.pscrn = 2;
         else
             d.pscrn = 1;
@@ -1472,7 +1527,7 @@ static void VS_CC nnedi3Create(const VSMap *in, VSMap *out, void *userData, VSCo
         return;
     }
 
-    if (d.vi.format->bitsPerSample == 8) {
+    if (d.vi.format->sampleType == stInteger) {
         if (d.pscrn < 0 || d.pscrn > 4) {
             vsapi->setError(out, "nnedi3: pscrn must be between 0 and 4 (inclusive)");
             vsapi->freeNode(d.node);
@@ -1509,10 +1564,11 @@ static void VS_CC nnedi3Create(const VSMap *in, VSMap *out, void *userData, VSCo
 
     d.max_value = 65535 >> (16 - d.vi.format->bitsPerSample);
 
-    if (d.vi.format->bitsPerSample > 8) {
+    if (d.vi.format->sampleType == stFloat)
         d.int16_prescreener = 0;
+
+    if (d.vi.format->bitsPerSample > 8)
         d.int16_predictor = 0;
-    }
 
     selectFunctions(&d);
 
