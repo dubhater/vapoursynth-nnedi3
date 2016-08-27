@@ -507,11 +507,13 @@ static void extract_m8_C(const uint8_t *srcp8, const intptr_t stride, const intp
 }
 
 
-static void extract_m8_i16_C(const uint8_t *srcp, const intptr_t stride, const intptr_t xdia, const intptr_t ydia, float *mstd, float *inputf) {
+template <typename PixelType>
+static void extract_m8_i16_C(const uint8_t *srcp8, const intptr_t stride, const intptr_t xdia, const intptr_t ydia, float *mstd, float *inputf) {
+    const PixelType *srcp = (const PixelType *)srcp8;
     int16_t *input = (int16_t *)inputf;
-    int sum = 0, sumsq = 0;
+    int64_t sum = 0, sumsq = 0;
     for (int y = 0; y < ydia; ++y) {
-        const uint8_t *srcpT = srcp + y * stride * 2;
+        const PixelType *srcpT = srcp + y * stride * 2;
         for (int x = 0; x < xdia; ++x) {
             sum += srcpT[x];
             sumsq += srcpT[x] * srcpT[x];
@@ -521,7 +523,7 @@ static void extract_m8_i16_C(const uint8_t *srcp, const intptr_t stride, const i
     }
     const float scale = 1.0f / (float)(xdia * ydia);
     mstd[0] = sum * scale;
-    mstd[1] = sumsq * scale - mstd[0] * mstd[0];
+    mstd[1] = (float)((double)sumsq * scale - mstd[0] * mstd[0]);
     mstd[3] = 0.0f;
     if (mstd[1] <= FLT_EPSILON)
         mstd[1] = mstd[2] = 0.0f;
@@ -726,7 +728,7 @@ static void selectFunctions(nnedi3Data *d) {
         d->wae5 = weightedAvgElliottMul5_m16_C;
 
         if (d->int16_predictor) { // use int16 dot products
-            d->extract = extract_m8_i16_C;
+            d->extract = extract_m8_i16_C<uint8_t>;
             d->dotProd = dotProdS_C;
         } else { // use float dot products
             d->extract = extract_m8_C<uint8_t, int32_t, float>;
@@ -837,8 +839,13 @@ static void selectFunctions(nnedi3Data *d) {
         // evalFunc_1
         d->wae5 = weightedAvgElliottMul5_m16_C;
 
-        d->extract = extract_m8_C<uint16_t, int64_t, double>;
-        d->dotProd = dotProd_C;
+        if (d->int16_predictor) { // only used for 9..15 bits
+            d->extract = extract_m8_i16_C<uint16_t>;
+            d->dotProd = dotProdS_C;
+        } else {
+            d->extract = extract_m8_C<uint16_t, int64_t, double>;
+            d->dotProd = dotProd_C;
+        }
 
         if (d->exp == 2) // use slow exp
             d->expfunc = e2_m16_C;
@@ -868,11 +875,15 @@ static void selectFunctions(nnedi3Data *d) {
             // evalFunc_1
             d->wae5 = nnedi3_weightedAvgElliottMul5_m16_SSE2;
 
-            d->dotProd = nnedi3_dotProd_SSE2;
-            if (cpu.fma3)
-                d->dotProd = nnedi3_dotProd_FMA3;
-            if (cpu.fma4)
-                d->dotProd = nnedi3_dotProd_FMA4;
+            if (d->int16_predictor) {
+                d->dotProd = nnedi3_dotProd_i16_SSE2;
+            } else {
+                d->dotProd = nnedi3_dotProd_SSE2;
+                if (cpu.fma3)
+                    d->dotProd = nnedi3_dotProd_FMA3;
+                if (cpu.fma4)
+                    d->dotProd = nnedi3_dotProd_FMA4;
+            }
 
             if (d->exp == 2) { // use slow exp
                 d->expfunc = nnedi3_e2_m16_SSE2;
@@ -898,7 +909,12 @@ static void selectFunctions(nnedi3Data *d) {
             } else {
                 d->computeNetwork0 = computeNetwork0new_neon;
             }
-            d->dotProd = dotProd_neon;
+
+            if (d->int16_predictor) {
+                d->dotProd = dotProd_i16_neon;
+            } else {
+                d->dotProd = dotProd_neon;
+            }
         }
 #endif
     } else if (d->vi.format->sampleType == stFloat && d->vi.format->bitsPerSample == 32) {
@@ -1567,7 +1583,8 @@ static void VS_CC nnedi3Create(const VSMap *in, VSMap *out, void *userData, VSCo
     if (d.vi.format->sampleType == stFloat)
         d.int16_prescreener = 0;
 
-    if (d.vi.format->bitsPerSample > 8)
+    // int16 dotProd can be used with up to 15 bits input
+    if (d.vi.format->bitsPerSample > 15)
         d.int16_predictor = 0;
 
     selectFunctions(&d);
