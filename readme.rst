@@ -9,7 +9,11 @@ This is a port of tritical's nnedi3 filter.
 Usage
 =====
 
-The file ``nnedi3_weights.bin`` is required. In Windows, it must be located in the same folder as ``libnnedi3.dll``. Everywhere else it can be located either in the same folder as ``libnnedi3.so``/``libnnedi3.dylib``, or in ``$prefix/share/nnedi3/``. The build system installs it at the latter location automatically.
+The file ``nnedi3_weights.bin`` is required. In Windows, it must be
+located in the same folder as ``libnnedi3.dll``. Everywhere else it
+can be located either in the same folder as
+``libnnedi3.so``/``libnnedi3.dylib``, or in ``$prefix/share/nnedi3/``.
+The build system installs it at the latter location automatically.
 
 ::
 
@@ -25,16 +29,27 @@ Allowed values (ranges are inclusive):
 - pscrn: 0..4
 - exp: 0..2
 
-When the input clip has float samples, the *pscrn* parameter can only be 0 or 1, and the *int16_prescreener* parameter is ignored.
-When the input clip has more than 15 bits per sample, the *int16_predictor* parameter is ignored.
+When the input clip has float samples, the *pscrn* parameter can only
+be 0 or 1, and the *int16_prescreener* parameter is ignored.
 
-The opt parameter is now a boolean. If False, only C functions will be used. If True, the best functions that can run on your CPU will be selected automatically.
+When the input clip has more than 15 bits per sample, the
+*int16_predictor* parameter is ignored.
 
-If *dh* is True, the ``_Field`` frame property is used to determine each frame's field dominance. The *field* parameter is only a fallback for frames that don't have the ``_Field`` property.
+The opt parameter is now a boolean. If False, only C functions will be
+used. If True, the best functions that can run on your CPU will be
+selected automatically.
 
-If *dh* is False, the ``_FieldBased`` frame property is used to determine each frame's field dominance. The *field* parameter is only a fallback for frames that don't have the ``_FieldBased`` property, or where said property indicates that the frame is progressive.
+If *dh* is True, the ``_Field`` frame property is used to determine
+each frame's field dominance. The *field* parameter is only a fallback
+for frames that don't have the ``_Field`` property.
 
-This plugin no longer provides the nnedi3_rpow2 filter. A replacement can be found here: http://forum.doom9.org/showthread.php?t=172652
+If *dh* is False, the ``_FieldBased`` frame property is used to
+determine each frame's field dominance. The *field* parameter is only
+a fallback for frames that don't have the ``_FieldBased`` property,
+or where said property indicates that the frame is progressive.
+
+This plugin no longer provides the nnedi3_rpow2 filter. A replacement
+can be found here: http://forum.doom9.org/showthread.php?t=172652
 
 
 Compilation
