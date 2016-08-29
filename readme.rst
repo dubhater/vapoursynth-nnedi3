@@ -177,11 +177,11 @@ Parameters:
         Default: True.
 
     *exp*
-        The exp function approximation to use in the predictor. 2 is
-        the fastest and least accurate. 0 is the slowest and most
+        The exp function approximation to use in the predictor. 0 is
+        the fastest and least accurate. 2 is the slowest and most
         accurate.
 
-        Default: 2.
+        Default: 0.
 
     *show_mask*
         If True, the pixels that would be processed with the predictor
