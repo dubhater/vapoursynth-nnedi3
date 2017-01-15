@@ -984,273 +984,6 @@ static void selectFunctions(nnedi3Data *d) {
 static void VS_CC nnedi3Init(VSMap *in, VSMap *out, void **instanceData, VSNode *node, VSCore *core, const VSAPI *vsapi) {
     nnedi3Data *d = (nnedi3Data *) * instanceData;
     vsapi->setVideoInfo(&d->vi, 1, node);
-
-    std::string weights_name("nnedi3_weights.bin");
-
-    VSPlugin *nnedi3Plugin = vsapi->getPluginById("com.deinterlace.nnedi3", core);
-    std::string plugin_path(vsapi->getPluginPath(nnedi3Plugin));
-    std::string weights_path(plugin_path.substr(0, plugin_path.find_last_of('/')) + "/" + weights_name);
-
-    FILE *weights_file = NULL;
-
-#ifdef _WIN32
-    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>, wchar_t> utf16;
-
-    weights_file = _wfopen(utf16.from_bytes(weights_path).c_str(), L"rb");
-#else
-    weights_file = fopen(weights_path.c_str(), "rb");
-#endif
-
-
-#if ! defined(_WIN32) && defined(NNEDI3_DATADIR)
-    if (!weights_file) {
-        weights_path = std::string(NNEDI3_DATADIR) + "/" + weights_name;
-        weights_file = fopen(weights_path.c_str(), "rb");
-    }
-#endif
-    if (!weights_file) {
-        vsapi->setError(out, ("nnedi3: Couldn't open file '" + weights_path + "'. Error message: " + strerror(errno)).c_str());
-        return;
-    }
-
-    if (fseek(weights_file, 0, SEEK_END)) {
-        vsapi->setError(out, ("nnedi3: Failed to seek to the end of '" + weights_path + "'. Error message: " + strerror(errno)).c_str());
-        fclose(weights_file);
-        return;
-    }
-
-    long expected_size = 13574928; // Version 0.9.4 of the Avisynth plugin.
-    long weights_size = ftell(weights_file);
-    if (weights_size == -1) {
-        vsapi->setError(out, ("nnedi3: Failed to determine the size of '" + weights_path + "'. Error message: " + strerror(errno)).c_str());
-        fclose(weights_file);
-        return;
-    } else if (weights_size != expected_size) {
-        vsapi->setError(out, ("nnedi3: '" + weights_path + "' has the wrong size. Expected " + std::to_string(expected_size) + " bytes, got " + std::to_string(weights_size) + " bytes.").c_str());
-        fclose(weights_file);
-        return;
-    }
-
-    if (fseek(weights_file, 0, SEEK_SET)) {
-        vsapi->setError(out, ("nnedi3: Failed to seek back to the beginning of '" + weights_path + "'. Error message: " + strerror(errno)).c_str());
-        fclose(weights_file);
-        return;
-    }
-
-    float *bdata = (float *)malloc(expected_size);
-    size_t bytes_read = fread(bdata, 1, expected_size, weights_file);
-
-    if (bytes_read != (size_t)expected_size) {
-        vsapi->setError(out, ("nnedi3: Expected to read " + std::to_string(expected_size) + " bytes from '" + weights_path + "', read " + std::to_string(bytes_read) + " bytes instead.").c_str());
-        fclose(weights_file);
-        free(bdata);
-        return;
-    }
-
-    fclose(weights_file);
-
-    const int xdiaTable[NUM_NSIZE] = { 8, 16, 32, 48, 8, 16, 32 };
-    const int ydiaTable[NUM_NSIZE] = { 6, 6, 6, 6, 4, 4, 4 };
-    const int nnsTable[NUM_NNS] = { 16, 32, 64, 128, 256 };
-
-    const int dims0 = 49 * 4 + 5 * 4 + 9 * 4;
-    const int dims0new = 4 * 65 + 4 * 5;
-    const int dims1 = nnsTable[d->nnsparam] * 2 * (xdiaTable[d->nsize] * ydiaTable[d->nsize] + 1);
-    int dims1tsize = 0;
-    int dims1offset = 0;
-
-    for (int j = 0; j < NUM_NNS; ++j) {
-        for (int i = 0; i < NUM_NSIZE; ++i) {
-            if (i == d->nsize && j == d->nnsparam)
-                dims1offset = dims1tsize;
-            dims1tsize += nnsTable[j] * 2 * (xdiaTable[i] * ydiaTable[i] + 1) * 2;
-        }
-    }
-
-    d->weights0 = vs_aligned_malloc<float>(std::max(dims0, dims0new) * sizeof(float), 16);
-
-    for (int i = 0; i < 2; ++i)
-        d->weights1[i] = vs_aligned_malloc<float>(dims1 * sizeof(float), 16);
-
-
-    // Adjust prescreener weights
-    if (d->pscrn >= 2) {// using new prescreener
-        int *offt = (int *)calloc(4 * 64, sizeof(int));
-        for (int j = 0; j < 4; ++j)
-            for (int k = 0; k < 64; ++k)
-                offt[j * 64 + k] = ((k >> 3) << 5) + ((j & 3) << 3) + (k & 7);
-        const float *bdw = bdata + dims0 + dims0new * (d->pscrn - 2);
-        int16_t *ws = (int16_t *)d->weights0;
-        float *wf = (float *)&ws[4 * 64];
-        double mean[4] = { 0.0, 0.0, 0.0, 0.0 };
-        // Calculate mean weight of each first layer neuron
-        for (int j = 0; j < 4; ++j) {
-            double cmean = 0.0;
-            for (int k = 0; k < 64; ++k)
-                cmean += bdw[offt[j * 64 + k]];
-            mean[j] = cmean / 64.0;
-        }
-
-        // 16 bit pixels will be shifted by 1 for the prescreener.
-        const int prescreener_bits = std::min(d->vi.format->bitsPerSample, 15);
-        const double half = ((1 << prescreener_bits) - 1) / 2.0;
-
-        // Factor mean removal and 1.0/half scaling
-        // into first layer weights. scale to int16 range
-        for (int j = 0; j < 4; ++j) {
-            double mval = 0.0;
-            for (int k = 0; k < 64; ++k)
-                mval = std::max(mval, std::fabs((bdw[offt[j * 64 + k]] - mean[j]) / half));
-            const double scale = 32767.0 / mval;
-            for (int k = 0; k < 64; ++k)
-                ws[offt[j * 64 + k]] = roundds(((bdw[offt[j * 64 + k]] - mean[j]) / half) * scale);
-            wf[j] = (float)(mval / 32767.0);
-        }
-        memcpy(wf + 4, bdw + 4 * 64, (dims0new - 4 * 64) * sizeof(float));
-        free(offt);
-    } else {// using old prescreener
-        double mean[4] = { 0.0, 0.0, 0.0, 0.0 };
-        // Calculate mean weight of each first layer neuron
-        for (int j = 0; j < 4; ++j) {
-            double cmean = 0.0;
-            for (int k = 0; k < 48; ++k)
-                cmean += bdata[j * 48 + k];
-            mean[j] = cmean / 48.0;
-        }
-        if (d->int16_prescreener) {// use int16 dot products in first layer
-            int16_t *ws = (int16_t *)d->weights0;
-            float *wf = (float *)&ws[4 * 48];
-
-            // 16 bit pixels will be shifted by 1 for the prescreener.
-            const int prescreener_bits = std::min(d->vi.format->bitsPerSample, 15);
-            const double half = ((1 << prescreener_bits) - 1) / 2.0;
-
-            // Factor mean removal and 1.0/half scaling
-            // into first layer weights. scale to int16 range
-            for (int j = 0; j < 4; ++j) {
-                double mval = 0.0;
-                for (int k = 0; k < 48; ++k)
-                    mval = std::max(mval, std::fabs((bdata[j * 48 + k] - mean[j]) / half));
-                const double scale = 32767.0 / mval;
-                for (int k = 0; k < 48; ++k)
-                    ws[j * 48 + k] = roundds(((bdata[j * 48 + k] - mean[j]) / half) * scale);
-                wf[j] = (float)(mval / 32767.0);
-            }
-            memcpy(wf + 4, bdata + 4 * 48, (dims0 - 4 * 48) * sizeof(float));
-            if (d->opt) {// shuffle weight order for asm
-                int16_t *rs = (int16_t *)malloc(dims0 * sizeof(float));
-                memcpy(rs, d->weights0, dims0 * sizeof(float));
-                for (int j = 0; j < 4; ++j)
-                    for (int k = 0; k < 48; ++k)
-                        ws[(k >> 3) * 32 + j * 8 + (k & 7)] = rs[j * 48 + k];
-                shufflePreScrnL2L3(wf + 8, ((float *)&rs[4 * 48]) + 8);
-                free(rs);
-            }
-        } else {// use float dot products in first layer
-            double half = (1 << d->vi.format->bitsPerSample) - 1;
-            if (d->vi.format->sampleType == stFloat)
-                half = 1.0;
-            half /= 2;
-
-            // Factor mean removal and 1.0/half scaling
-            // into first layer weights.
-            for (int j = 0; j < 4; ++j)
-                for (int k = 0; k < 48; ++k)
-                    d->weights0[j * 48 + k] = (float)((bdata[j * 48 + k] - mean[j]) / half);
-            memcpy(d->weights0 + 4 * 48, bdata + 4 * 48, (dims0 - 4 * 48) * sizeof(float));
-            if (d->opt) {// shuffle weight order for asm
-                float *wf = d->weights0;
-                float *rf = (float *)malloc(dims0 * sizeof(float));
-                memcpy(rf, d->weights0, dims0 * sizeof(float));
-                for (int j = 0; j < 4; ++j)
-                    for (int k = 0; k < 48; ++k)
-                        wf[(k >> 2) * 16 + j * 4 + (k & 3)] = rf[j * 48 + k];
-                shufflePreScrnL2L3(wf + 4 * 49, rf + 4 * 49);
-                free(rf);
-            }
-        }
-    }
-
-    // Adjust prediction weights
-    for (int i = 0; i < 2; ++i) {
-        const float *bdataT = bdata + dims0 + dims0new * 3 + dims1tsize * d->etype + dims1offset + i * dims1;
-        const int nnst = nnsTable[d->nnsparam];
-        const int asize = xdiaTable[d->nsize] * ydiaTable[d->nsize];
-        const int boff = nnst * 2 * asize;
-        double *mean = (double *)calloc(asize + 1 + nnst * 2, sizeof(double));
-        // Calculate mean weight of each neuron (ignore bias)
-        for (int j = 0; j < nnst * 2; ++j) {
-            double cmean = 0.0;
-            for (int k = 0; k < asize; ++k)
-                cmean += bdataT[j * asize + k];
-            mean[asize + 1 + j] = cmean / (double)asize;
-        }
-        // Calculate mean softmax neuron
-        for (int j = 0; j < nnst; ++j) {
-            for (int k = 0; k < asize; ++k)
-                mean[k] += bdataT[j * asize + k] - mean[asize + 1 + j];
-            mean[asize] += bdataT[boff + j];
-        }
-        for (int j = 0; j < asize + 1; ++j)
-            mean[j] /= (double)(nnst);
-
-        if (d->int16_predictor) {// use int16 dot products
-            int16_t *ws = (int16_t *)d->weights1[i];
-            float *wf = (float *)&ws[nnst * 2 * asize];
-            // Factor mean removal into weights, remove global offset from
-            // softmax neurons, and scale weights to int16 range.
-            for (int j = 0; j < nnst; ++j) {// softmax neurons
-                double mval = 0.0;
-                for (int k = 0; k < asize; ++k)
-                    mval = std::max(mval, std::fabs(bdataT[j * asize + k] - mean[asize + 1 + j] - mean[k]));
-                const double scale = 32767.0 / mval;
-                for (int k = 0; k < asize; ++k)
-                    ws[j * asize + k] = roundds((bdataT[j * asize + k] - mean[asize + 1 + j] - mean[k]) * scale);
-                wf[(j >> 2) * 8 + (j & 3)] = (float)(mval / 32767.0);
-                wf[(j >> 2) * 8 + (j & 3) + 4] = (float)(bdataT[boff + j] - mean[asize]);
-            }
-            for (int j = nnst; j < nnst * 2; ++j) {// elliott neurons
-                double mval = 0.0;
-                for (int k = 0; k < asize; ++k)
-                    mval = std::max(mval, std::fabs(bdataT[j * asize + k] - mean[asize + 1 + j]));
-                const double scale = 32767.0 / mval;
-                for (int k = 0; k < asize; ++k)
-                    ws[j * asize + k] = roundds((bdataT[j * asize + k] - mean[asize + 1 + j]) * scale);
-                wf[(j >> 2) * 8 + (j & 3)] = (float)(mval / 32767.0);
-                wf[(j >> 2) * 8 + (j & 3) + 4] = bdataT[boff + j];
-            }
-            if (d->opt) {// shuffle weight order for asm
-                int16_t *rs = (int16_t *)malloc(nnst * 2 * asize * sizeof(int16_t));
-                memcpy(rs, ws, nnst * 2 * asize * sizeof(int16_t));
-                for (int j = 0; j < nnst * 2; ++j)
-                    for (int k = 0; k < asize; ++k)
-                        ws[(j >> 2) * asize * 4 + (k >> 3) * 32 + (j & 3) * 8 + (k & 7)] = rs[j * asize + k];
-                free(rs);
-            }
-        } else {// use float dot products
-            // Factor mean removal into weights, and remove global
-            // offset from softmax neurons.
-            for (int j = 0; j < nnst * 2; ++j) {
-                for (int k = 0; k < asize; ++k) {
-                    const double q = j < nnst ? mean[k] : 0.0;
-                    if (d->opt) // shuffle weight order for asm
-                        d->weights1[i][(j >> 2) * asize * 4 + (k >> 2) * 16 + (j & 3) * 4 + (k & 3)] =
-                            (float)(bdataT[j * asize + k] - mean[asize + 1 + j] - q);
-                    else
-                        d->weights1[i][j * asize + k] = (float)(bdataT[j * asize + k] - mean[asize + 1 + j] - q);
-                }
-                d->weights1[i][boff + j] = (float)(bdataT[boff + j] - (j < nnst ? mean[asize] : 0.0));
-            }
-        }
-        free(mean);
-    }
-
-    d->nns = nnsTable[d->nnsparam];
-    d->xdia = xdiaTable[d->nsize];
-    d->ydia = ydiaTable[d->nsize];
-    d->asize = xdiaTable[d->nsize] * ydiaTable[d->nsize];
-
-    free(bdata);
 }
 
 
@@ -1589,11 +1322,279 @@ static void VS_CC nnedi3Create(const VSMap *in, VSMap *out, void *userData, VSCo
 
     selectFunctions(&d);
 
+
+    std::string weights_name("nnedi3_weights.bin");
+
+    VSPlugin *nnedi3Plugin = vsapi->getPluginById("com.deinterlace.nnedi3", core);
+    std::string plugin_path(vsapi->getPluginPath(nnedi3Plugin));
+    std::string weights_path(plugin_path.substr(0, plugin_path.find_last_of('/')) + "/" + weights_name);
+
+    FILE *weights_file = NULL;
+
+#ifdef _WIN32
+    std::wstring_convert<std::codecvt_utf8_utf16<wchar_t>, wchar_t> utf16;
+
+    weights_file = _wfopen(utf16.from_bytes(weights_path).c_str(), L"rb");
+#else
+    weights_file = fopen(weights_path.c_str(), "rb");
+#endif
+
+
+#if ! defined(_WIN32) && defined(NNEDI3_DATADIR)
+    if (!weights_file) {
+        weights_path = std::string(NNEDI3_DATADIR) + "/" + weights_name;
+        weights_file = fopen(weights_path.c_str(), "rb");
+    }
+#endif
+    if (!weights_file) {
+        vsapi->setError(out, ("nnedi3: Couldn't open file '" + weights_path + "'. Error message: " + strerror(errno)).c_str());
+        return;
+    }
+
+    if (fseek(weights_file, 0, SEEK_END)) {
+        vsapi->setError(out, ("nnedi3: Failed to seek to the end of '" + weights_path + "'. Error message: " + strerror(errno)).c_str());
+        fclose(weights_file);
+        return;
+    }
+
+    long expected_size = 13574928; // Version 0.9.4 of the Avisynth plugin.
+    long weights_size = ftell(weights_file);
+    if (weights_size == -1) {
+        vsapi->setError(out, ("nnedi3: Failed to determine the size of '" + weights_path + "'. Error message: " + strerror(errno)).c_str());
+        fclose(weights_file);
+        return;
+    } else if (weights_size != expected_size) {
+        vsapi->setError(out, ("nnedi3: '" + weights_path + "' has the wrong size. Expected " + std::to_string(expected_size) + " bytes, got " + std::to_string(weights_size) + " bytes.").c_str());
+        fclose(weights_file);
+        return;
+    }
+
+    if (fseek(weights_file, 0, SEEK_SET)) {
+        vsapi->setError(out, ("nnedi3: Failed to seek back to the beginning of '" + weights_path + "'. Error message: " + strerror(errno)).c_str());
+        fclose(weights_file);
+        return;
+    }
+
+    float *bdata = (float *)malloc(expected_size);
+    size_t bytes_read = fread(bdata, 1, expected_size, weights_file);
+
+    if (bytes_read != (size_t)expected_size) {
+        vsapi->setError(out, ("nnedi3: Expected to read " + std::to_string(expected_size) + " bytes from '" + weights_path + "', read " + std::to_string(bytes_read) + " bytes instead.").c_str());
+        fclose(weights_file);
+        free(bdata);
+        return;
+    }
+
+    fclose(weights_file);
+
+    const int xdiaTable[NUM_NSIZE] = { 8, 16, 32, 48, 8, 16, 32 };
+    const int ydiaTable[NUM_NSIZE] = { 6, 6, 6, 6, 4, 4, 4 };
+    const int nnsTable[NUM_NNS] = { 16, 32, 64, 128, 256 };
+
+    const int dims0 = 49 * 4 + 5 * 4 + 9 * 4;
+    const int dims0new = 4 * 65 + 4 * 5;
+    const int dims1 = nnsTable[d.nnsparam] * 2 * (xdiaTable[d.nsize] * ydiaTable[d.nsize] + 1);
+    int dims1tsize = 0;
+    int dims1offset = 0;
+
+    for (int j = 0; j < NUM_NNS; ++j) {
+        for (int i = 0; i < NUM_NSIZE; ++i) {
+            if (i == d.nsize && j == d.nnsparam)
+                dims1offset = dims1tsize;
+            dims1tsize += nnsTable[j] * 2 * (xdiaTable[i] * ydiaTable[i] + 1) * 2;
+        }
+    }
+
+    d.weights0 = vs_aligned_malloc<float>(std::max(dims0, dims0new) * sizeof(float), 16);
+
+    for (int i = 0; i < 2; ++i)
+        d.weights1[i] = vs_aligned_malloc<float>(dims1 * sizeof(float), 16);
+
+
+    // Adjust prescreener weights
+    if (d.pscrn >= 2) {// using new prescreener
+        int *offt = (int *)calloc(4 * 64, sizeof(int));
+        for (int j = 0; j < 4; ++j)
+            for (int k = 0; k < 64; ++k)
+                offt[j * 64 + k] = ((k >> 3) << 5) + ((j & 3) << 3) + (k & 7);
+        const float *bdw = bdata + dims0 + dims0new * (d.pscrn - 2);
+        int16_t *ws = (int16_t *)d.weights0;
+        float *wf = (float *)&ws[4 * 64];
+        double mean[4] = { 0.0, 0.0, 0.0, 0.0 };
+        // Calculate mean weight of each first layer neuron
+        for (int j = 0; j < 4; ++j) {
+            double cmean = 0.0;
+            for (int k = 0; k < 64; ++k)
+                cmean += bdw[offt[j * 64 + k]];
+            mean[j] = cmean / 64.0;
+        }
+
+        // 16 bit pixels will be shifted by 1 for the prescreener.
+        const int prescreener_bits = std::min(d.vi.format->bitsPerSample, 15);
+        const double half = ((1 << prescreener_bits) - 1) / 2.0;
+
+        // Factor mean removal and 1.0/half scaling
+        // into first layer weights. scale to int16 range
+        for (int j = 0; j < 4; ++j) {
+            double mval = 0.0;
+            for (int k = 0; k < 64; ++k)
+                mval = std::max(mval, std::fabs((bdw[offt[j * 64 + k]] - mean[j]) / half));
+            const double scale = 32767.0 / mval;
+            for (int k = 0; k < 64; ++k)
+                ws[offt[j * 64 + k]] = roundds(((bdw[offt[j * 64 + k]] - mean[j]) / half) * scale);
+            wf[j] = (float)(mval / 32767.0);
+        }
+        memcpy(wf + 4, bdw + 4 * 64, (dims0new - 4 * 64) * sizeof(float));
+        free(offt);
+    } else {// using old prescreener
+        double mean[4] = { 0.0, 0.0, 0.0, 0.0 };
+        // Calculate mean weight of each first layer neuron
+        for (int j = 0; j < 4; ++j) {
+            double cmean = 0.0;
+            for (int k = 0; k < 48; ++k)
+                cmean += bdata[j * 48 + k];
+            mean[j] = cmean / 48.0;
+        }
+        if (d.int16_prescreener) {// use int16 dot products in first layer
+            int16_t *ws = (int16_t *)d.weights0;
+            float *wf = (float *)&ws[4 * 48];
+
+            // 16 bit pixels will be shifted by 1 for the prescreener.
+            const int prescreener_bits = std::min(d.vi.format->bitsPerSample, 15);
+            const double half = ((1 << prescreener_bits) - 1) / 2.0;
+
+            // Factor mean removal and 1.0/half scaling
+            // into first layer weights. scale to int16 range
+            for (int j = 0; j < 4; ++j) {
+                double mval = 0.0;
+                for (int k = 0; k < 48; ++k)
+                    mval = std::max(mval, std::fabs((bdata[j * 48 + k] - mean[j]) / half));
+                const double scale = 32767.0 / mval;
+                for (int k = 0; k < 48; ++k)
+                    ws[j * 48 + k] = roundds(((bdata[j * 48 + k] - mean[j]) / half) * scale);
+                wf[j] = (float)(mval / 32767.0);
+            }
+            memcpy(wf + 4, bdata + 4 * 48, (dims0 - 4 * 48) * sizeof(float));
+            if (d.opt) {// shuffle weight order for asm
+                int16_t *rs = (int16_t *)malloc(dims0 * sizeof(float));
+                memcpy(rs, d.weights0, dims0 * sizeof(float));
+                for (int j = 0; j < 4; ++j)
+                    for (int k = 0; k < 48; ++k)
+                        ws[(k >> 3) * 32 + j * 8 + (k & 7)] = rs[j * 48 + k];
+                shufflePreScrnL2L3(wf + 8, ((float *)&rs[4 * 48]) + 8);
+                free(rs);
+            }
+        } else {// use float dot products in first layer
+            double half = (1 << d.vi.format->bitsPerSample) - 1;
+            if (d.vi.format->sampleType == stFloat)
+                half = 1.0;
+            half /= 2;
+
+            // Factor mean removal and 1.0/half scaling
+            // into first layer weights.
+            for (int j = 0; j < 4; ++j)
+                for (int k = 0; k < 48; ++k)
+                    d.weights0[j * 48 + k] = (float)((bdata[j * 48 + k] - mean[j]) / half);
+            memcpy(d.weights0 + 4 * 48, bdata + 4 * 48, (dims0 - 4 * 48) * sizeof(float));
+            if (d.opt) {// shuffle weight order for asm
+                float *wf = d.weights0;
+                float *rf = (float *)malloc(dims0 * sizeof(float));
+                memcpy(rf, d.weights0, dims0 * sizeof(float));
+                for (int j = 0; j < 4; ++j)
+                    for (int k = 0; k < 48; ++k)
+                        wf[(k >> 2) * 16 + j * 4 + (k & 3)] = rf[j * 48 + k];
+                shufflePreScrnL2L3(wf + 4 * 49, rf + 4 * 49);
+                free(rf);
+            }
+        }
+    }
+
+    // Adjust prediction weights
+    for (int i = 0; i < 2; ++i) {
+        const float *bdataT = bdata + dims0 + dims0new * 3 + dims1tsize * d.etype + dims1offset + i * dims1;
+        const int nnst = nnsTable[d.nnsparam];
+        const int asize = xdiaTable[d.nsize] * ydiaTable[d.nsize];
+        const int boff = nnst * 2 * asize;
+        double *mean = (double *)calloc(asize + 1 + nnst * 2, sizeof(double));
+        // Calculate mean weight of each neuron (ignore bias)
+        for (int j = 0; j < nnst * 2; ++j) {
+            double cmean = 0.0;
+            for (int k = 0; k < asize; ++k)
+                cmean += bdataT[j * asize + k];
+            mean[asize + 1 + j] = cmean / (double)asize;
+        }
+        // Calculate mean softmax neuron
+        for (int j = 0; j < nnst; ++j) {
+            for (int k = 0; k < asize; ++k)
+                mean[k] += bdataT[j * asize + k] - mean[asize + 1 + j];
+            mean[asize] += bdataT[boff + j];
+        }
+        for (int j = 0; j < asize + 1; ++j)
+            mean[j] /= (double)(nnst);
+
+        if (d.int16_predictor) {// use int16 dot products
+            int16_t *ws = (int16_t *)d.weights1[i];
+            float *wf = (float *)&ws[nnst * 2 * asize];
+            // Factor mean removal into weights, remove global offset from
+            // softmax neurons, and scale weights to int16 range.
+            for (int j = 0; j < nnst; ++j) {// softmax neurons
+                double mval = 0.0;
+                for (int k = 0; k < asize; ++k)
+                    mval = std::max(mval, std::fabs(bdataT[j * asize + k] - mean[asize + 1 + j] - mean[k]));
+                const double scale = 32767.0 / mval;
+                for (int k = 0; k < asize; ++k)
+                    ws[j * asize + k] = roundds((bdataT[j * asize + k] - mean[asize + 1 + j] - mean[k]) * scale);
+                wf[(j >> 2) * 8 + (j & 3)] = (float)(mval / 32767.0);
+                wf[(j >> 2) * 8 + (j & 3) + 4] = (float)(bdataT[boff + j] - mean[asize]);
+            }
+            for (int j = nnst; j < nnst * 2; ++j) {// elliott neurons
+                double mval = 0.0;
+                for (int k = 0; k < asize; ++k)
+                    mval = std::max(mval, std::fabs(bdataT[j * asize + k] - mean[asize + 1 + j]));
+                const double scale = 32767.0 / mval;
+                for (int k = 0; k < asize; ++k)
+                    ws[j * asize + k] = roundds((bdataT[j * asize + k] - mean[asize + 1 + j]) * scale);
+                wf[(j >> 2) * 8 + (j & 3)] = (float)(mval / 32767.0);
+                wf[(j >> 2) * 8 + (j & 3) + 4] = bdataT[boff + j];
+            }
+            if (d.opt) {// shuffle weight order for asm
+                int16_t *rs = (int16_t *)malloc(nnst * 2 * asize * sizeof(int16_t));
+                memcpy(rs, ws, nnst * 2 * asize * sizeof(int16_t));
+                for (int j = 0; j < nnst * 2; ++j)
+                    for (int k = 0; k < asize; ++k)
+                        ws[(j >> 2) * asize * 4 + (k >> 3) * 32 + (j & 3) * 8 + (k & 7)] = rs[j * asize + k];
+                free(rs);
+            }
+        } else {// use float dot products
+            // Factor mean removal into weights, and remove global
+            // offset from softmax neurons.
+            for (int j = 0; j < nnst * 2; ++j) {
+                for (int k = 0; k < asize; ++k) {
+                    const double q = j < nnst ? mean[k] : 0.0;
+                    if (d.opt) // shuffle weight order for asm
+                        d.weights1[i][(j >> 2) * asize * 4 + (k >> 2) * 16 + (j & 3) * 4 + (k & 3)] =
+                            (float)(bdataT[j * asize + k] - mean[asize + 1 + j] - q);
+                    else
+                        d.weights1[i][j * asize + k] = (float)(bdataT[j * asize + k] - mean[asize + 1 + j] - q);
+                }
+                d.weights1[i][boff + j] = (float)(bdataT[boff + j] - (j < nnst ? mean[asize] : 0.0));
+            }
+        }
+        free(mean);
+    }
+
+    d.nns = nnsTable[d.nnsparam];
+    d.xdia = xdiaTable[d.nsize];
+    d.ydia = ydiaTable[d.nsize];
+    d.asize = xdiaTable[d.nsize] * ydiaTable[d.nsize];
+
+    free(bdata);
+
+
     data = (nnedi3Data *)malloc(sizeof(d));
     *data = d;
 
     vsapi->createFilter(in, out, "nnedi3", nnedi3Init, nnedi3GetFrame, nnedi3Free, fmParallel, 0, data, core);
-    return;
 }
 
 
