@@ -1348,12 +1348,14 @@ static void VS_CC nnedi3Create(const VSMap *in, VSMap *out, void *userData, VSCo
 #endif
     if (!weights_file) {
         vsapi->setError(out, ("nnedi3: Couldn't open file '" + weights_path + "'. Error message: " + strerror(errno)).c_str());
+        vsapi->freeNode(d.node);
         return;
     }
 
     if (fseek(weights_file, 0, SEEK_END)) {
         vsapi->setError(out, ("nnedi3: Failed to seek to the end of '" + weights_path + "'. Error message: " + strerror(errno)).c_str());
         fclose(weights_file);
+        vsapi->freeNode(d.node);
         return;
     }
 
@@ -1362,16 +1364,19 @@ static void VS_CC nnedi3Create(const VSMap *in, VSMap *out, void *userData, VSCo
     if (weights_size == -1) {
         vsapi->setError(out, ("nnedi3: Failed to determine the size of '" + weights_path + "'. Error message: " + strerror(errno)).c_str());
         fclose(weights_file);
+        vsapi->freeNode(d.node);
         return;
     } else if (weights_size != expected_size) {
         vsapi->setError(out, ("nnedi3: '" + weights_path + "' has the wrong size. Expected " + std::to_string(expected_size) + " bytes, got " + std::to_string(weights_size) + " bytes.").c_str());
         fclose(weights_file);
+        vsapi->freeNode(d.node);
         return;
     }
 
     if (fseek(weights_file, 0, SEEK_SET)) {
         vsapi->setError(out, ("nnedi3: Failed to seek back to the beginning of '" + weights_path + "'. Error message: " + strerror(errno)).c_str());
         fclose(weights_file);
+        vsapi->freeNode(d.node);
         return;
     }
 
@@ -1382,6 +1387,7 @@ static void VS_CC nnedi3Create(const VSMap *in, VSMap *out, void *userData, VSCo
         vsapi->setError(out, ("nnedi3: Expected to read " + std::to_string(expected_size) + " bytes from '" + weights_path + "', read " + std::to_string(bytes_read) + " bytes instead.").c_str());
         fclose(weights_file);
         free(bdata);
+        vsapi->freeNode(d.node);
         return;
     }
 
