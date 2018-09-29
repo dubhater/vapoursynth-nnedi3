@@ -140,6 +140,7 @@ struct nnedi3Data {
     int int16_predictor;
     int exp;
     int show_mask;
+    int combed_only;
 
     int max_value;
 
@@ -1018,6 +1019,10 @@ static const VSFrameRef *VS_CC nnedi3GetFrame(int n, int activationReason, void 
         int err;
         const VSMap *src_props = vsapi->getFramePropsRO(src);
 
+        // Maybe process only combed frames.
+        if (d->combed_only && !vsapi->propGetInt(src_props, "_Combed", 0, &err))
+            return src;
+
         int effective_field = d->field;
         if (effective_field > 1)
             effective_field -= 2;
@@ -1237,6 +1242,8 @@ static void VS_CC nnedi3Create(const VSMap *in, VSMap *out, void *userData, VSCo
 
     d.show_mask = !!vsapi->propGetInt(in, "show_mask", 0, &err);
 
+    d.combed_only = !!vsapi->propGetInt(in, "combed_only", 0, &err);
+
     // Check the values.
     if (d.field < 0 || d.field > 3) {
         vsapi->setError(out, "nnedi3: field must be between 0 and 3 (inclusive)");
@@ -1248,6 +1255,12 @@ static void VS_CC nnedi3Create(const VSMap *in, VSMap *out, void *userData, VSCo
 
     if (d.dh && d.field > 1) {
         vsapi->setError(out, "nnedi3: field must be 0 or 1 when dh is true");
+        vsapi->freeNode(d.node);
+        return;
+    }
+
+    if (d.dh && d.combed_only) {
+        vsapi->setError(out, "nnedi3: dh and combed_only cannot both be true");
         vsapi->freeNode(d.node);
         return;
     }
@@ -1621,6 +1634,7 @@ VS_EXTERNAL_API(void) VapourSynthPluginInit(VSConfigPlugin configFunc, VSRegiste
             "int16_predictor:int:opt;"
             "exp:int:opt;"
             "show_mask:int:opt;"
+            "combed_only:int:opt;"
             , nnedi3Create, 0, plugin);
 }
 

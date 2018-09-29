@@ -23,7 +23,7 @@ The build system installs it at the latter location automatically.
 
 ::
 
-   nnedi3.nnedi3(clip clip, int field[, bint dh=False, int[] planes=[0, 1, 2], int nsize=6, int nns=1, int qual=1, int etype=0, int pscrn=2, bint opt=True, bint int16_prescreener=True, bint int16_predictor=True, int exp=0, bint show_mask=False])
+   nnedi3.nnedi3(clip clip, int field[, bint dh=False, int[] planes=[0, 1, 2], int nsize=6, int nns=1, int qual=1, int etype=0, int pscrn=2, bint opt=True, bint int16_prescreener=True, bint int16_predictor=True, int exp=0, bint show_mask=False, bint combed_only=False])
 
 Parameters:
     *clip*
@@ -186,6 +186,12 @@ Parameters:
     *show_mask*
         If True, the pixels that would be processed with the predictor
         neural network are instead set to white.
+
+        Default: False.
+
+    *combed_only*
+        If True, only frames where the ``_Combed`` property is 1 will
+        be processed. The rest will be returned unchanged.
 
         Default: False.
 
