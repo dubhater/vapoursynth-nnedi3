@@ -25,7 +25,8 @@ AS_CASE(
         [i?86], [BITS="32" ASFLAGS="$ASFLAGS -DARCH_X86_64=0" X86="true"],
         [x86_64], [BITS="64" ASFLAGS="$ASFLAGS -DARCH_X86_64=1 -DPIC -m amd64" X86="true"],
         [powerpc*], [PPC="true"],
-        [arm*], [ARM="true"] # Maybe doesn't work for all arm systems?
+        [arm*], [ARM="true" ASFLAGS="$ASFLAGS -march=armv7-a"] # Maybe doesn't work for all arm systems?
+        [aarch*], [ARM="true"]
 )
 
 AS_CASE(

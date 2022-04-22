@@ -64,6 +64,15 @@ void getCPUFeatures(CPUFeatures *cpuFeatures) {
     }
 
 }
+#elif defined(__APPLE__) && defined(NNEDI3_ARM)
+void getCPUFeatures(CPUFeatures *cpuFeatures) {
+    memset(cpuFeatures, 0, sizeof(CPUFeatures));
+    
+    cpuFeatures->can_run_vs = 1;
+    cpuFeatures->half_fp = true;
+    cpuFeatures->neon = true;
+
+}
 #else
 #include <sys/auxv.h>
 
